@@ -12,6 +12,15 @@
 #define LOW 0
 #define HEX 16
 #define LED_BUILTIN 13
+#define CHANGE 3
+#define RISING 4
+namespace mock { extern void (*irq_handlers[32])(); }
+inline int digitalPinToInterrupt(uint8_t pin) { return pin; }
+inline void attachInterrupt(int pin, void (*fn)(), int) { mock::irq_handlers[pin] = fn; }
+inline void detachInterrupt(int pin) { mock::irq_handlers[pin] = nullptr; }
+inline void noInterrupts() {}
+inline void interrupts() {}
+
 
 namespace mock {
 extern int pins[32];
@@ -30,6 +39,7 @@ inline int digitalRead(uint8_t p) {
   return mock::modes[p] == INPUT_PULLUP ? HIGH : mock::pins[p];
 }
 inline uint32_t millis() { return ++mock::tick; }
+inline uint32_t micros() { return ++mock::tick * 1000u; }
 inline void delayMicroseconds(unsigned) { ++mock::tick; }
 inline void delay(unsigned v) { mock::tick += v; }
 

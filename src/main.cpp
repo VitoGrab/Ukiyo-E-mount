@@ -5,10 +5,11 @@
 #include "ukiyo-e-mount/techart_sample.h"
 #include "ukiyo-e-mount/session.h"
 #include "ukiyo-e-mount/bench.h"
+#include "ukiyo-e-mount/camera_link.h"
 
-// v0.2.0 is a BENCH-ONLY firmware. No camera-facing pin is driven at boot.
-// 'uart on' drives D6/TX and must NEVER be used while a camera is connected.
-// Firmware uses USB CDC for diagnostics; it is not a functional lens yet.
+// v0.3.1 includes a timestamped, RX-only camera-link diagnostic.
+// Bench fixtures MUST be removed before connecting a camera.
+// This is not a complete E-mount lens emulator: it transmits no UART replies.
 
 namespace {
 
@@ -185,13 +186,14 @@ void negative_session_test() {
 }
 
 void print_status() {
-  Serial.println("=== ukiyoemount v0.2.1 BENCH ===");
+  Serial.println("=== ukiyoemount v0.3.1 BENCH / CAMERA DIAGNOSTICS ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("UART_BAUD="); Serial.println(kUartBaud);
   Serial.print("UART_MODE="); Serial.println(uart_mode ? "LOOPBACK" : "DISABLED");
   Serial.print("UART_SENT="); Serial.println(loop_sent);
   Serial.print("UART_LOOPBACK_FRAMES="); Serial.println(loop_frames);
-  Serial.println("CAMERA_TRANSMISSION=DISABLED");
+  Serial.println("CAMERA_UART_TRANSMISSION=DISABLED");
+  ukiyoemount::camera_link::status();
   Serial.println("OFFLINE_SESSION_ENGINE=ENABLED");
 }
 
@@ -218,9 +220,38 @@ void start_uart() {
 }
 
 void handle_command(const char* cmd) {
+  // Every command is echoed with a monotonic timestamp for log correlation.
+  // millis() wraps after ~49.7 days; micros() after ~71.6 minutes.
+  Serial.print("[t_ms="); Serial.print(millis());
+  Serial.print(" t_us="); Serial.print(micros());
+  Serial.print("] CMD="); Serial.println(cmd);
+
+  // Short camera commands can be typed quickly before switching the body on.
+  if (!strcmp(cmd, "h")) cmd = "help";
+  else if (!strcmp(cmd, "l")) cmd = "camera listen";
+  else if (!strcmp(cmd, "p")) cmd = "camera probe";
+  else if (!strcmp(cmd, "s")) cmd = "camera status";
+  else if (!strcmp(cmd, "t")) cmd = "camera trace";
+  else if (!strcmp(cmd, "x")) cmd = "camera stop";
   if (!strcmp(cmd, "help")) {
-    Serial.println("Commands: help, status, proto, session a6000, session a9ii, session faults, uart on, uart off, bench gpio, bench a6000, bench a9ii");
-    Serial.println("Offline sessions are memory-only. BENCH commands drive pins; NEVER attach a camera.");
+    Serial.println("Short camera commands: l=listen, p=probe, s=status, t=CS trace, x=stop, h=help.");
+    Serial.println("Commands: help, status, proto, session a6000, session a9ii, session faults, uart on, uart off, bench gpio, bench a6000, bench a9ii, camera listen, camera probe, camera status, camera trace, camera stop");
+    Serial.println("Remove ALL bench jumpers before a camera test. camera probe drives D10 only, never UART TX.");
+  } else if (!strcmp(cmd, "camera status")) {
+    ukiyoemount::camera_link::status();
+  } else if (!strcmp(cmd, "camera trace")) {
+    ukiyoemount::camera_link::trace();
+  } else if (!strcmp(cmd, "camera stop")) {
+    ukiyoemount::camera_link::stop();
+  } else if (!strcmp(cmd, "camera listen") || !strcmp(cmd, "camera probe")) {
+    if (uart_mode) stop_uart();
+    if (ukiyoemount::camera_link::active()) {
+      Serial.println("CAMERA_ALREADY_ACTIVE_USE_camera_stop");
+    } else {
+      ukiyoemount::camera_link::start(!strcmp(cmd, "camera probe"));
+    }
+  } else if (ukiyoemount::camera_link::active()) {
+    Serial.println("CAMERA_MODE_ACTIVE_USE_camera_stop_BEFORE_BENCH");
   } else if (!strcmp(cmd, "status")) {
     print_status();
   } else if (!strcmp(cmd, "proto")) {
@@ -304,17 +335,20 @@ void setup() {
 }
 
 void loop() {
+  // Give the two timed CS transitions priority over USB command handling.
+  ukiyoemount::camera_link::poll();
   const uint32_t now = millis();
-  if (now - last_led >= 500) {
+  if (!ukiyoemount::camera_link::timing_critical() && now - last_led >= 500) {
     last_led = now;
     led_on = !led_on;
     digitalWrite(LED_BUILTIN, led_on ? LOW : HIGH);
   }
   if (Serial && !banner_printed) {
     banner_printed = true;
-    Serial.println("ukiyoemount v0.2.1 READY / SAFE BOOT");
-    Serial.println("Type help, proto, session a6000, session a9ii, status.");
+    Serial.println("ukiyoemount v0.3.1 READY / SAFE BOOT");
+    Serial.println("Type h, l, p, s, t or x. All camera GPIO start high-impedance.");
   }
   poll_command();
   poll_uart();
+  ukiyoemount::camera_link::poll();
 }
