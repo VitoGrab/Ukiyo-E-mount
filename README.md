@@ -1,5 +1,4 @@
-# 浮世E-mount
-## (ukiyo-e-mount)
+# 浮世E-mount (ukiyo-e-mount)
 
 Open-hardware Sony E-mount lens emulator based on XIAO SAMD21 board bridging vintage manual optics and modern digital cameras.
 
@@ -16,17 +15,17 @@ to other lenses including zoom lenses.
 
 | Stage | Deliverable | Exit criterion |
 |---|---|---|
-| 0. Board validation | XIAO USB upload, monitoring, 750 kbaud D6-D7 loopback | Already demonstrated by user |
+| 0. Board validation | XIAO USB upload, monitoring, 750 kbaud D6-D7 loopback | Tests pass without camera |
 | 1. Protocol workbench | Frame encoder/parser, checksum, imported 0x07 identity fixture, host regression tests | Tests pass without camera |
 | 2. Safe bus bring-up | Electrical validation, body CS capture, clock/baud, shutdown, high-Z pins when off | Observed handshake and no backfeeding |
 | 3. Manual-lens emulation | Techart init/status replies, A6000 capability and 0x0C speed handling | Camera keeps lens powered and shoots |
 | 4. EXIF verification | 58 mm and manual aperture profile, identity experiments | ARW FocalLength, LensInfo, LensModel inspected with ExifTool |
 | 4.5 More cameras compatibility | Checking compatibility with other Sony cameras | Camera keeps lens powered and shoots |
 | 5. Standalone power | Safe power switching from LOGIC_VCC or regulated motor supply | Works without USB and after repeated mounts |
+| 6. Mechanical integration | Non-destructive adapter fit, contact PCB if needed | Secure fit, no shorts, optics unaffected |
 |---|---EXTRAS---|---|
-| 6. Aperture sensing | Analog lever sensor / optional button mode | Consistent aperture values |
-| 7. Extras | I2C sensors, lens position, optional ranging/AF experiments | Separate proof-of-concept tests |
-| 8. Mechanical integration | Non-destructive adapter fit, contact PCB if needed | Secure fit, no shorts, optics unaffected |
+| 7. Aperture sensing | Analog lever sensor / optional button mode | Consistent aperture values |
+| 8. Extras | I2C sensors, lens position, optional ranging/AF experiments | Separate proof-of-concept tests |
 
 ### Technical design decisions
 

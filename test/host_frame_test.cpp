@@ -5,7 +5,7 @@
 #include <cstring>
 
 int main() {
-  using namespace ukiyo-e-mount;
+  using namespace ukiyoemount;
   static_assert(kTechartIdentityPayloadSize == 34, "0x07 reply must have 34 payload bytes");
   uint8_t frame[kMaxFrame] = {};
   size_t size = 0;

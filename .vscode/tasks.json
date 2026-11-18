@@ -1,0 +1,71 @@
+
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}"
+  },
+  "tasks": [
+    {
+      "label": "Ukiyo: Build",
+      "type": "process",
+      "command": "/opt/platformio/bin/pio",
+      "args": ["run"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Ukiyo: Upload",
+      "type": "process",
+      "command": "/opt/platformio/bin/pio",
+      "args": ["run", "-t", "upload"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Ukiyo: Monitor",
+      "type": "process",
+      "command": "/opt/platformio/bin/pio",
+      "args": [
+        "device", "monitor",
+        "-p", "/dev/ttyACM0",
+        "-b", "115200"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Ukiyo: Upload + Monitor",
+      "type": "shell",
+      "command": "/opt/platformio/bin/pio run -t upload && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Ukiyo: Clean",
+      "type": "process",
+      "command": "/opt/platformio/bin/pio",
+      "args": ["run", "-t", "clean"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}
