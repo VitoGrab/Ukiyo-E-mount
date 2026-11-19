@@ -1,0 +1,30 @@
+diff --git a/lib/ukiyo_techart/src/board.h b/lib/ukiyo_techart/src/board.h
+index c6c4f86..6607d1a 100644
+--- a/lib/ukiyo_techart/src/board.h
++++ b/lib/ukiyo_techart/src/board.h
+@@ -10,4 +10,8 @@
+ #define EM_PIN_LENS_CS 10
+ #define EM_BAUD 0xC000u
+ #define EM_BAUD_FAST 0x8000u
++// Protocol-side focus travel bounds retained from Techart board.h.
++// They constrain reported position fields; Ukiyo has no focus motor.
++#define ENC_TRAVEL_LO 4144
++#define ENC_TRAVEL_HI 5632
+ #endif
+diff --git a/lib/ukiyo_techart/src/ukiyo_hal.cpp b/lib/ukiyo_techart/src/ukiyo_hal.cpp
+index 8f07f47..a524577 100644
+--- a/lib/ukiyo_techart/src/ukiyo_hal.cpp
++++ b/lib/ukiyo_techart/src/ukiyo_hal.cpp
+@@ -2,8 +2,12 @@
+ // No USB logging in interrupts, UART writes, or CS callbacks.
+ #include <Arduino.h>
+ #include "board.h"
++// Techart headers are C headers without their own C++ linkage guards.
++// Match the C linkage used by their implementations in emount.c.
++extern "C" {
+ #include "em_uart.h"
+ #include "em_eic.h"
++}
+ #include "ukiyo_hal.h"
+ 
+ namespace {
