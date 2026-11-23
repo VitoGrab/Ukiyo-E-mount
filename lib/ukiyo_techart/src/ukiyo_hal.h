@@ -4,7 +4,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+void ukiyo_supply_init(void);
 int ukiyo_supply_ok(void);
+uint16_t ukiyo_supply_adc(void);
+uint16_t ukiyo_supply_adc_min(void);
+uint16_t ukiyo_supply_adc_max(void);
+uint32_t ukiyo_supply_rises(void);
+uint32_t ukiyo_supply_falls(void);
+uint32_t ukiyo_supply_last_on_us(void);
+uint32_t ukiyo_supply_last_off_us(void);
 void ukiyo_bus_abort(void);
 void ukiyo_gpio_lens_cs(int high);
 void ukiyo_gpio_body_cs_input(void);

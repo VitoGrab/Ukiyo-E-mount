@@ -8,9 +8,8 @@
 #include "ukiyo-e-mount/camera_link.h"
 #include "ukiyo-e-mount/techart_port.h"
 
-// v0.4.0 keeps the RX-only diagnostic and adds an optional Techart protocol port.
-// Safe boot: no camera-facing GPIO is driven until explicit active test.
-// The active port requires the separately wired and protected D0 power sensor.
+// v0.4.1: auto-arm Techart before USB CDC; drive camera outputs only after
+// qualified LOGIC_VCC. Diagnostic and bench modes remain manually selectable.
 
 namespace {
 
@@ -187,7 +186,7 @@ void negative_session_test() {
 }
 
 void print_status() {
-  Serial.println("=== ukiyoemount v0.4.0 BENCH / CAMERA / TECHART ===");
+  Serial.println("=== ukiyoemount v0.4.1 BENCH / CAMERA / TECHART ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("UART_BAUD="); Serial.println(kUartBaud);
   Serial.print("UART_MODE="); Serial.println(uart_mode ? "LOOPBACK" : "DISABLED");
@@ -237,7 +236,8 @@ void handle_command(const char* cmd) {
   else if (!strcmp(cmd, "x")) cmd = "camera stop";
   else if (!strcmp(cmd, "e")) cmd = "camera emulate";
   if (!strcmp(cmd, "help")) {
-    Serial.println("Short camera commands: l=listen, p=probe, e=emulate, s=status, t=CS trace, x=stop, h=help.");
+    Serial.println("Short camera commands: l=listen, p=probe, e=rearm, s=status, t=CS trace, x=stop, h=help.");
+    Serial.println("Auto emulation is armed at boot; x disables it until e or reset.");
     Serial.println("Commands: help, status, proto, session a6000, session a9ii, session faults, uart on, uart off, bench gpio, bench a6000, bench a9ii, camera listen, camera probe, camera emulate, camera status, camera trace, camera stop");
     Serial.println("Remove ALL bench jumpers before a camera test. camera probe drives D10 only, never UART TX.");
   } else if (!strcmp(cmd, "camera status")) {
@@ -341,14 +341,20 @@ void poll_uart() {
 }  // namespace
 
 void setup() {
+  const uint32_t sketch_entry_ms = millis();
   safe_pins();
+  // Set the supply gate and persistent standby BEFORE initializing USB CDC.
+  ukiyoemount::techart::boot_auto_arm(sketch_entry_ms, millis());
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-  Serial.begin(115200);
+  led_on = true;
+  last_led = millis();
+  digitalWrite(LED_BUILTIN, LOW);  // Visible as soon as sketch starts (active-low).
+  Serial.begin(115200);  // No wait for Serial or USB host.
+  ukiyoemount::techart::record_setup_done(millis());
 }
 
 void loop() {
-  // The active Techart protocol runs without per-byte USB logging.
+  // Service the camera first; USB and LED are lower-priority diagnostics.
   ukiyoemount::techart::poll();
   ukiyoemount::camera_link::poll();
   const uint32_t now = millis();
@@ -359,11 +365,10 @@ void loop() {
   }
   if (Serial && !banner_printed) {
     banner_printed = true;
-    Serial.println("ukiyoemount v0.4.0 READY / SAFE BOOT");
-    Serial.println("Type h, l, p, e, s, t or x. Camera GPIO start high-impedance.");
+    Serial.println("ukiyoemount v0.4.1 READY / AUTO-ARMED");
+    Serial.println("Type h, l, p, e, s, t or x. x disables auto-arm; e re-enables.");
   }
   poll_command();
   poll_uart();
   ukiyoemount::camera_link::poll();
-  ukiyoemount::techart::poll();
 }

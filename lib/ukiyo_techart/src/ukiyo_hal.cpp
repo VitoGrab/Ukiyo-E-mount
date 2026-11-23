@@ -9,6 +9,7 @@ extern "C" {
 #include "em_eic.h"
 }
 #include "ukiyo_hal.h"
+#include "ukiyo-e-mount/supply_gate.h"
 
 namespace {
 uint8_t rx_buf[EM_RX_BUF_LEN];
@@ -18,6 +19,10 @@ volatile bool uart_enabled = false;
 volatile bool callbacks_enabled = false;
 volatile uint32_t configured_baud = 750000u;
 volatile bool supply_good_cached = false;
+ukiyoemount::SupplyGate supply_gate;
+uint32_t last_adc_sample_us = 0;
+bool adc_sampled = false;
+constexpr uint32_t kAdcSampleIntervalUs = 2000u;
 void (*cs_handler)(int) = nullptr;
 void (*vd_handler)(void) = nullptr;
 
@@ -152,12 +157,34 @@ int em_pin_level(uint8_t pin) { return digitalRead(pin); }
 void delay_ms(uint32_t ms) { delay(ms); }
 void delay_us(uint32_t us) { delayMicroseconds(us); }
 
-// D0 has ADC, but is NOT five-volt tolerant. D0 must see 1/2 of LOGIC_VCC
-// through a 100k/100k divider, not the bare red wire.
+// D0 is not 5V-tolerant. Sense Sony LOGIC_VCC only via a 100k/100k divider.
+// Keep ADC conversions out of the high-rate protocol path (sampling at 500 Hz).
+// Brief ADC glitches are ignored, but sustained loss releases camera outputs.
+void ukiyo_supply_init(void) {
+  pinMode(A0, INPUT);
+  analogReadResolution(10);
+  supply_gate.reset();
+  supply_good_cached = false;
+  adc_sampled = false;
+  last_adc_sample_us = 0;
+}
 int ukiyo_supply_ok(void) {
-  supply_good_cached = (analogRead(A0) >= 370);
+  const uint32_t now = micros();
+  if (!adc_sampled || (uint32_t)(now - last_adc_sample_us) >= kAdcSampleIntervalUs) {
+    const int raw = analogRead(A0);
+    last_adc_sample_us = now;
+    adc_sampled = true;
+    supply_good_cached = supply_gate.update(static_cast<uint16_t>(raw), now);
+  }
   return supply_good_cached;
 }
+uint16_t ukiyo_supply_adc(void) { return supply_gate.raw(); }
+uint16_t ukiyo_supply_adc_min(void) { return supply_gate.min_raw(); }
+uint16_t ukiyo_supply_adc_max(void) { return supply_gate.max_raw(); }
+uint32_t ukiyo_supply_rises(void) { return supply_gate.rises(); }
+uint32_t ukiyo_supply_falls(void) { return supply_gate.falls(); }
+uint32_t ukiyo_supply_last_on_us(void) { return supply_gate.last_on_us(); }
+uint32_t ukiyo_supply_last_off_us(void) { return supply_gate.last_off_us(); }
 void ukiyo_gpio_lens_cs(int high) {
   if (!supply_good_cached) {
     pinMode(EM_PIN_LENS_CS, INPUT);
@@ -178,7 +205,8 @@ void ukiyo_gpio_tx_unmux(void) { /* end() removed the UART peripheral mux */ }
 void ukiyo_bus_abort(void) {
   em_eic_pause();
   em_uart_disable();
-  supply_good_cached = false;
+  // Preserve the qualified ADC state: forcing it LOW here would make the
+  // outer fault-recovery logic mistake an abort for a camera power-off.
   pinMode(EM_PIN_LENS_CS, INPUT);
 }
 
