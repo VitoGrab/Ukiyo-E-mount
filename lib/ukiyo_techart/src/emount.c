@@ -1498,8 +1498,10 @@ static void em_trace_store(uint8_t kind, uint16_t length,
     uint16_t i, idx;
     volatile struct em_trace_event *e;
     if (g_trace_frozen) return;
-    if (kind == EM_TRACE_VALID && available > 5u
-        && raw[3] == EM_CLASS_INIT && raw[5] == 0x0Au) return;
+    /* 0x0A is intentionally filtered, including malformed candidates that
+     * still carry its recognizable class/ID header. */
+    if (available > 5u && raw[3] == EM_CLASS_INIT && raw[5] == 0x0Au)
+        return;
 
     idx = g_trace_head;
     e = &g_trace_events[idx];
