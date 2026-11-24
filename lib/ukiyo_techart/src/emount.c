@@ -1480,6 +1480,103 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 	}
 }
 
+/* Diagnostic events are collected from the framer (including CS IRQ context)
+ * and dumped later by the optional USB monitor. No Serial in the fast path.
+ * The 128-entry ring retains a recent pre-shutdown history and freezes after
+ * 64 post-0x16 events. Use 'camera trace clear' between experiments.
+ */
+static volatile struct em_trace_event g_trace_events[EM_TRACE_SIZE];
+static volatile uint16_t g_trace_head;
+static volatile uint16_t g_trace_count;
+static volatile uint16_t g_trace_post;
+static volatile uint8_t g_trace_triggered;
+static volatile uint8_t g_trace_frozen;
+
+static void em_trace_store(uint8_t kind, uint16_t length,
+                           const uint8_t *raw, uint16_t available)
+{
+    uint16_t i, idx;
+    volatile struct em_trace_event *e;
+    if (g_trace_frozen) return;
+    if (kind == EM_TRACE_VALID && available > 5u
+        && raw[3] == EM_CLASS_INIT && raw[5] == 0x0Au) return;
+
+    idx = g_trace_head;
+    e = &g_trace_events[idx];
+    e->t_ms = millis();
+    e->length = length;
+    e->kind = kind;
+    e->msg_class = available > 3u ? raw[3] : 0xFFu;
+    e->id = available > 5u ? raw[5] : 0xFFu;
+    e->sample_len = (uint8_t)(available < EM_TRACE_SAMPLE
+                              ? available : EM_TRACE_SAMPLE);
+    for (i = 0; i < e->sample_len; ++i) e->sample[i] = raw[i];
+
+    g_trace_head = (uint16_t)((idx + 1u) % EM_TRACE_SIZE);
+    if (g_trace_count < EM_TRACE_SIZE) ++g_trace_count;
+    if (!g_trace_triggered && kind == EM_TRACE_VALID
+        && e->msg_class == EM_CLASS_INIT && e->id == EM_ID_SHUTDOWN) {
+        g_trace_triggered = 1u;
+        g_trace_post = 0u;
+    } else if (g_trace_triggered && ++g_trace_post >= 64u) {
+        g_trace_frozen = 1u;
+    }
+}
+
+static void em_trace_rx_sample(uint8_t kind, uint16_t length, uint16_t avail)
+{
+    uint8_t bytes[EM_TRACE_SAMPLE];
+    uint16_t i, n = avail < EM_TRACE_SAMPLE ? avail : EM_TRACE_SAMPLE;
+    for (i = 0; i < n; ++i) bytes[i] = em_uart_rx_at(i);
+    em_trace_store(kind, length, bytes, n);
+}
+
+uint16_t em_trace_count(void)
+{
+    uint16_t n;
+    __disable_irq(); n = g_trace_count; __enable_irq();
+    return n;
+}
+
+uint8_t em_trace_frozen(void) { return g_trace_frozen; }
+
+uint8_t em_trace_get(uint16_t index, struct em_trace_event *out)
+{
+    uint16_t n, pos, i;
+    if (!out) return 0u;
+    __disable_irq();
+    n = g_trace_count;
+    if (index >= n) { __enable_irq(); return 0u; }
+    pos = (uint16_t)((g_trace_head + EM_TRACE_SIZE - n + index) % EM_TRACE_SIZE);
+    out->t_ms = g_trace_events[pos].t_ms;
+    out->length = g_trace_events[pos].length;
+    out->kind = g_trace_events[pos].kind;
+    out->msg_class = g_trace_events[pos].msg_class;
+    out->id = g_trace_events[pos].id;
+    out->sample_len = g_trace_events[pos].sample_len;
+    for (i = 0; i < EM_TRACE_SAMPLE; ++i) out->sample[i] = g_trace_events[pos].sample[i];
+    __enable_irq();
+    return 1u;
+}
+
+void em_trace_clear(void)
+{
+    __disable_irq();
+    g_trace_head = g_trace_count = g_trace_post = 0u;
+    g_trace_triggered = g_trace_frozen = 0u;
+    __enable_irq();
+}
+
+void em_trace_supply(uint8_t power_good, uint16_t adc10)
+{
+    /* Called only from the main loop, where a short critical section avoids
+     * interleaving with a CS interrupt logging another event. */
+    __disable_irq();
+    em_trace_store(power_good ? EM_TRACE_SUPPLY_ON : EM_TRACE_SUPPLY_OFF,
+                   adc10, 0, 0u);
+    __enable_irq();
+}
+
 /* THE FRAMER.  The receive ring holds bytes, not windows: a frame is wherever
  * an 0xF0 starts a run whose length field, 0x55 terminator and checksum all
  * agree.  This replaces "rising edge clears the buffer, falling edge parses
@@ -1520,6 +1617,7 @@ static uint16_t em_rx_drain(void)
 	avail = em_uart_rx_count();
 	while (avail) {
 		uint16_t len, k, sum;
+        uint8_t bad_kind = EM_TRACE_BAD_FRAME;
 
 		if (em_uart_rx_at(0) != EM_FRAME_START) {
 			em_uart_rx_consume(1);
@@ -1544,6 +1642,7 @@ static uint16_t em_rx_drain(void)
 				continue;
 			}
 			if (avail < 3u) {
+                em_trace_rx_sample(EM_TRACE_TRUNCATED, avail, avail);
 				em_uart_rx_consume(avail);
 				break;
 			}
@@ -1557,11 +1656,13 @@ static uint16_t em_rx_drain(void)
 		}
 		if (em_uart_rx_at(len - 3u) != (uint8_t)sum
 		    || em_uart_rx_at(len - 2u) != (uint8_t)(sum >> 8)) {
+            bad_kind = EM_TRACE_BAD_CHECKSUM;
 			goto not_a_frame;
 		}
 		for (k = 0; k < len; k++) {
 			g_frame[k] = em_uart_rx_at(k);
 		}
+        em_trace_store(EM_TRACE_VALID, len, g_frame, len);
 		em_uart_rx_consume(len);
 		avail = (uint16_t)(avail - len);
 		em_frame_in(g_frame, len);
@@ -1569,6 +1670,7 @@ static uint16_t em_rx_drain(void)
 		continue;
 
 not_a_frame:
+        em_trace_rx_sample(bad_kind, len, avail);
 		if (em_bad_frames != 0xFFu) {
 			em_bad_frames++;
 		}
