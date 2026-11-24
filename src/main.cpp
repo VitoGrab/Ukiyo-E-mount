@@ -233,10 +233,11 @@ void handle_command(const char* cmd) {
   else if (!strcmp(cmd, "p")) cmd = "camera probe";
   else if (!strcmp(cmd, "s")) cmd = "camera status";
   else if (!strcmp(cmd, "t")) cmd = "camera trace";
+  else if (!strcmp(cmd, "tr")) cmd = "camera trace clear";
   else if (!strcmp(cmd, "x")) cmd = "camera stop";
   else if (!strcmp(cmd, "e")) cmd = "camera emulate";
   if (!strcmp(cmd, "help")) {
-    Serial.println("Short camera commands: l=listen, p=probe, e=rearm, s=status, t=CS trace, x=stop, h=help.");
+    Serial.println("Short camera commands: l=listen, p=probe, e=rearm, s=status, t=protocol trace, tr=trace clear, x=stop, h=help.");
     Serial.println("Auto emulation is armed at boot; x disables it until e or reset.");
     Serial.println("Commands: help, status, proto, session a6000, session a9ii, session faults, uart on, uart off, bench gpio, bench a6000, bench a9ii, camera listen, camera probe, camera emulate, camera status, camera trace, camera stop");
     Serial.println("Remove ALL bench jumpers before a camera test. camera probe drives D10 only, never UART TX.");
@@ -246,6 +247,8 @@ void handle_command(const char* cmd) {
   } else if (!strcmp(cmd, "camera trace")) {
     ukiyoemount::camera_link::trace();
     ukiyoemount::techart::trace();
+  } else if (!strcmp(cmd, "camera trace clear")) {
+    ukiyoemount::techart::clear_trace();
   } else if (!strcmp(cmd, "camera stop")) {
     ukiyoemount::techart::stop();
     ukiyoemount::camera_link::stop();
