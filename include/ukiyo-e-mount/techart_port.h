@@ -8,5 +8,6 @@ void poll();
 void stop();
 void status();
 void trace();
+void clear_trace();
 bool active();
 } }
