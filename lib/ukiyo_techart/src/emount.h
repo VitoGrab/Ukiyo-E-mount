@@ -94,6 +94,34 @@ void em_poll(void);
  * natives measured, 0x02 on all three adapters.  Left alone so this run has one
  * variable; it is the obvious follow-up if the ID alone changes nothing. */
 
+/* Bounded in-RAM diagnostic capture. Never performs USB I/O in ISR context.
+ * Sample includes only the first bytes of a frame, not its entire payload.
+ * Capture preserves recent traffic before 0x16 and up to 64 later events.
+ * It freezes rather than overwriting the initial wake attempt.
+ */
+#define EM_TRACE_SIZE 128u
+#define EM_TRACE_SAMPLE 12u
+#define EM_TRACE_VALID         1u
+#define EM_TRACE_BAD_FRAME     2u
+#define EM_TRACE_BAD_CHECKSUM  3u
+#define EM_TRACE_TRUNCATED     4u
+#define EM_TRACE_SUPPLY_ON     5u
+#define EM_TRACE_SUPPLY_OFF    6u
+struct em_trace_event {
+    uint32_t t_ms;
+    uint16_t length;   /* declared frame length; ADC10 for supply events */
+    uint8_t kind;
+    uint8_t msg_class;
+    uint8_t id;
+    uint8_t sample_len;
+    uint8_t sample[EM_TRACE_SAMPLE];
+};
+uint16_t em_trace_count(void);
+uint8_t em_trace_frozen(void);
+uint8_t em_trace_get(uint16_t index, struct em_trace_event *out);
+void em_trace_clear(void);
+void em_trace_supply(uint8_t power_good, uint16_t adc10);
+
 extern volatile uint8_t  em_shutdown_acked;  /* 0x16 answered, status loop off */
 extern volatile uint32_t em_t_shutdown;      /* ms when it was answered */
 extern volatile uint32_t em_t_revived;       /* ms a new session reopened us */
