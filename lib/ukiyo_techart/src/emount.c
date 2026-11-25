@@ -2759,6 +2759,15 @@ void em_poll(void)
 	g_in_poll = 0;
 }
 
+/* The XIAO can stay externally powered in standby. These entry points do
+ * not block the Arduino main loop; the HAL owns the pin-level wake path. */
+void em_suspend_begin(void)
+{
+    em_handshake_done = 0;
+    g_status_due = 0;
+    count16(&em_sleep_n);
+}
+
 /* THE STANDBY WAIT (emount.h).  Entered from the power-down handler, after the
  * 0x16 reply, with our UART off and PA00 driven low. */
 
@@ -2788,6 +2797,22 @@ static void em_session_reset(void)
 	g_t_prev_vd      = 0;    /* the gap across the standby is not a frame */
 	__enable_irq();
 	em_set_scan_state(0);
+}
+
+/* Complete the previously negotiated session after the pin-level handshake.
+ * No call to em_init(): that would reset the UART to 750 kbaud and announce
+ * an unrequested cold initialization during a short wake. */
+void em_suspend_woke(void)
+{
+    em_session_reset();
+    em_wake_first_id = 0;
+    g_woke = 1;
+    count16(&em_wake_n);
+    em_t_wake = millis();
+    em_t_revived = em_t_wake;
+    em_t_last_frame = em_t_wake;
+    em_shutdown_acked = 0;
+    g_m16_seen = 0;
 }
 
 /* The wake pin handshake, from the moment the body's chip select is seen high.
