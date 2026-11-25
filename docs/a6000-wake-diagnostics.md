@@ -21,15 +21,17 @@ activity that can precede UART traffic.
 ## Capture format
 
 - **EVT 0** is the first valid init-class 0x16 seen after `tr`.
-- Ignore valid or recognizably malformed 0x0A, and normal-class
-  0x03/0x04. No pre-shutdown traffic remains in the dump.
+- Ignore valid or recognizably malformed 0x0A, and **valid** normal-class
+  0x03/0x04. Corrupted 0x03/0x04 candidates remain visible. No
+  pre-shutdown traffic remains in the dump.
 - Record other valid frames, checksum failures, malformed headers,
   truncated candidates and qualified ADC supply transitions.
 - After 0x16, capture the **first 32 BODY_CS edges** with microsecond
   timestamps and a snapshot of exposed pin levels; count but omit further
   edges so the buffer still has room for subsequent events.
-- Poll pin levels passively every 20 ms in the main loop and record changes;
-  write an idle snapshot every 2 s even if no bus edge occurs.
+- Poll pin levels passively every 20 ms in the main loop and record changes
+  except VD-only (frame-sync) transitions; write an idle snapshot every 2 s
+  even if no bus edge occurs.
 - Retain up to 128 events after shutdown; freeze on a successful-looking
   resume sequence once a 0x01 or 0x0B has been received followed by 0x10.
   A full buffer also freezes. Capture is otherwise allowed to remain
