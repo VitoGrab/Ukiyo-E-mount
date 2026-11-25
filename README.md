@@ -22,7 +22,7 @@ to other lenses including zoom lenses.
 | 4. EXIF verification | Helios 44M-4 profile, 58 mm, f/2 nameplate, configurable reported aperture | ARW reports correct lens identity, focal length, aperture and MF | Completed on a6000 (v0.4.2) |
 | 4.5. Body lifecycle capture | Trace 0x16, sleep/wake, loss of lens rail and remount | Validated short wake, full re-init after removal and runtime capture | Completed on a6000 (2026-11-25) |
 | 4.6. Body-driven autonomous operation | 0x16 electrical shutdown, short wake at 1.5 Mbaud, supply-loss rearm and optional USB trace | Repeated wake, full init, remount, shooting and EXIF | Completed for USB-powered a6000 prototype (2026-11-25); LED/boot refinements in 4.7 |
-| 4.6.1. Protocol identity / EXIF experiment | Report Ukiyo 0.4 and E-mount protocol 1.31 in message 0x07 | Camera Version screen and ARW/JPG EXIF checked without MF regression | Awaiting a6000 test |
+| 4.6.1. Protocol identity / EXIF experiment | Baseline 1.08 with firmware 04.000; test experimental XX.YYY suffix | Compare camera Version screen and ARW/JPG EXIF, retaining MF/wake behavior | Baseline verified; XX.YYY minor mapping unverified |
 | 4.7. Protocol and codebase cleanup | Consolidate mode/state handling, remove obsolete bench modes and Techart-specific naming from project-owned code | No regressions against v0.4.2 and autonomous lifecycle tests | Next |
 | 4.8. Additional body compatibility | Test a6500 after refactoring; retain a6000 regression suite | Mount, MF, EXIF, sleep/wake and remount pass on both bodies | Planned |
 | 5. Standalone power | Validate XIAO supply from camera rail with regulated/protected power path | Repeated mounts and wake cycles work without USB or backfeeding | Planned |
@@ -75,20 +75,34 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 ### Stage 4.6.1: firmware and E-mount protocol identity (experimental)
 
-- `config/protocol_identity.json` is the project-wide source of truth for
-  the advertised identity, independent of the Helios lens profile.
-- `tools/apply_lens_profile.py` generates message `0x07` identity fields:
-  `pl[2..3] = 31 01` (E-mount protocol 1.31) and `pl[6] = 04`
-  (single-byte BCD firmware 0.4). The full project version 0.4.2 is
-  not representable in this byte and is recorded separately.
-- The camera currently displays Lens Ver.22 for payload `0x22`.
-  How it displays `0x04`, and whether ARW/JPG MakerNotes gain
-  `LensE-mountVersion` or `LensFirmwareVersion`, require camera testing.
-- This protocol bump is an experiment: confirm cold startup, short wake,
-  native MF, picture capture and Helios EXIF again. Revert the protocol
-  field alone to 1.08 if the body changes its requests or behaves abnormally.
-- Test with `exiftool -G1 -s -LensE-mountVersion -LensFirmwareVersion
-  -LensModel -LensInfo -LensType2 <image.ARW>` (replace the placeholder).
+Sony a6000 ARW/JPG tests confirmed that E-mount protocol **1.08**
+already yields both `LensE-mountVersion` and `LensFirmwareVersion`
+in ExifTool. `0x07 pl[6]=0x22` produced `Ver.22.000`, and
+`pl[6]=0x04` produced `Ver.04.000` (with protocol 1.31).
+Increasing the protocol revision to 1.31 is not required to expose
+these fields; the a6000-tested **1.08** is the default again.
+
+- `config/protocol_identity.json` holds the project version and
+  the **XX.YYY** wire-version string, initially `04.000`.
+- `tools/apply_lens_profile.py` regenerates `0x07`:
+  `pl[2..3]=08 01` (1.08), `pl[6]=04` (confirmed major),
+  `pl[5]=00` (unconfirmed subversion candidate), and checksum.
+- **Controlled experimental override** without editing the JSON:
+  `python3 tools/apply_lens_profile.py --lens-firmware-version 04.002`.
+  This sets `pl[5]=02`, `pl[6]=04` and recalculates the checksum.
+  Afterwards `python3 tools/apply_lens_profile.py` restores
+  `04.000` from the JSON.
+- The `pl[5]` mapping is only a hypothesis, **not** established by
+  packet reverse engineering. The previous manual `04.002` test
+  reportedly caused both version fields to disappear. Therefore,
+  independently confirm baseline `04.000`, then vary only `pl[5]`
+  to `02` and compare ARW/JPG as a separate experiment. If metadata
+  disappears again, stop using this field; it may be reserved.
+- The Sony camera Version menu only displays the integer portion on
+  the tested native lenses. The ExifTool `Ver.04.002` representation,
+  if achievable, need not appear in that camera menu.
+- `--verify-only` now checks that generated sources **match**
+  the selected identity, not merely that packet templates parse.
 
 ### Stages 4.7-5: cleanup, compatibility and power
 
