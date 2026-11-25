@@ -84,7 +84,7 @@ The numbered list below retains the complete long-term acceptance criteria.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that the generated packet sources and compile-time version header match the JSON configuration.
-- Monitor startup, `h` help and status output use the generated `h0.42` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `h0.46` label; there is no separate version command.
 
 ### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
