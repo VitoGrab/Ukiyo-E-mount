@@ -1,10 +1,12 @@
 #include <Arduino.h>
+#include <stdio.h>
 #include "ukiyo-e-mount/techart_port.h"
 #include "ukiyo-e-mount/vendor_status.h"
 #if UKIYO_TECHART_VENDOR_PRESENT
 extern "C" {
 #include "emount.h"
 #include "em_uart.h"
+#include "em_eic.h"
 #include "ukiyo_hal.h"
 }
 #endif
@@ -28,6 +30,15 @@ uint32_t wake_successes = 0;
 uint32_t wake_retries = 0;
 uint32_t wake_supply_resets = 0;
 bool log_suspended_pending = false;
+struct TraceDump {
+  bool active;
+  uint16_t count;
+  uint16_t index;
+  uint16_t len;
+  uint16_t pos;
+  char line[224];
+};
+TraceDump trace_dump = {};
 const uint32_t kWakeHandshakeTimeoutUs = 2000000u;
 bool supply_event_known = false;
 bool last_supply_state = false;
@@ -359,54 +370,98 @@ void status() {
 #endif
 }
 
+/* Request a snapshot of the available trace. Unlike the old implementation,
+ * this is permitted while RUNNING; transmission is handled in short,
+ * nonblocking USB CDC chunks by poll_trace(). */
 void trace() {
 #if UKIYO_TECHART_VENDOR_PRESENT
-  // Printing many events at 115200 baud can disrupt active bus timing.
-  if (mode == Running && !em_shutdown_acked) {
-    Serial.println("PROTOCOL_TRACE_DEFERRED_ACTIVE_SESSION");
-    Serial.println("ACTION=CAPTURE_THEN_INSPECT_AFTER_0x16_OR_DISCONNECT");
-    return;
-  }
-  const uint16_t events = em_trace_count();
-  Serial.print("PROTOCOL_TRACE_COUNT="); Serial.println(events);
+  if (!Serial) return;
+  trace_dump.active = false;
+  const uint16_t n = em_trace_count();
+  Serial.print("PROTOCOL_TRACE_COUNT="); Serial.println(n);
   Serial.print("PROTOCOL_TRACE_FROZEN="); Serial.println(em_trace_frozen());
   Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
   Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
   Serial.println("PIN_MASK_BITS=BODY_CS:1 BODY_VD:2 BODY_TX_TO_XIAO_RX:4 XIAO_TX_TO_BODY_RX:8 LENS_CS:16");
-  for (uint16_t i = 0; i < events; ++i) {
-    struct em_trace_event e;
-    if (!em_trace_get(i, &e)) break;
-    Serial.print("EVT="); Serial.print(i);
-    Serial.print(" T_MS="); Serial.print(e.t_ms);
-    Serial.print(" T_US="); Serial.print(e.t_us);
-    Serial.print(" KIND="); Serial.print(e.kind);
-    if (e.kind >= EM_TRACE_CS_RISE && e.kind <= EM_TRACE_IDLE) {
-      Serial.print(" PINS=0x"); Serial.print(e.length, HEX);
-    } else {
-      Serial.print(" LEN_OR_ADC="); Serial.print(e.length);
-      Serial.print(" CLASS=0x"); Serial.print(e.msg_class, HEX);
-      Serial.print(" ID=0x"); Serial.print(e.id, HEX);
-    }
-    Serial.print(" HEAD=");
-    for (uint8_t k = 0; k < e.sample_len; ++k) {
-      if (e.sample[k] < 16u) Serial.print('0');
-      Serial.print(e.sample[k], HEX);
-      if (k + 1u < e.sample_len) Serial.print(' ');
-    }
-    Serial.println();
-  }
-
-  const uint8_t n = ukiyo_trace_count();
-  Serial.print("TECHART_CS_TRACE_COUNT="); Serial.println(n);
-  for (uint8_t i = 0; i < n; ++i) {
-    Serial.print("CS_EDGE_"); Serial.print(i + 1);
-    Serial.print("_US="); Serial.print(ukiyo_trace_time(i));
-    Serial.print(" LEVEL="); Serial.println(ukiyo_trace_level(i) ? "HIGH" : "LOW");
-  }
+  Serial.println("PROTOCOL_TRACE_STREAM=NONBLOCKING_SNAPSHOT");
+  trace_dump.count = n;
+  trace_dump.index = 0;
+  trace_dump.len = 0;
+  trace_dump.pos = 0;
+  trace_dump.active = n > 0;
 #else
-  Serial.println("TECHART_TRACE=UNAVAILABLE_NO_VENDOR");
+  Serial.println("PROTOCOL_TRACE=UNAVAILABLE_NO_VENDOR");
 #endif
 }
+
+void poll_trace() {
+#if UKIYO_TECHART_VENDOR_PRESENT
+  if (!trace_dump.active || !Serial) return;
+  if (trace_dump.pos == trace_dump.len) {
+    if (trace_dump.index >= trace_dump.count) {
+      trace_dump.active = false;
+      return;
+    }
+    struct em_trace_event e;
+    if (!em_trace_get(trace_dump.index++, &e)) {
+      trace_dump.active = false;
+      return;
+    }
+    const size_t cap = sizeof(trace_dump.line);
+    int written = snprintf(trace_dump.line, cap,
+       "EVT=%u T_MS=%lu T_US=%lu KIND=%u",
+       (unsigned)(trace_dump.index - 1u),
+       (unsigned long)e.t_ms, (unsigned long)e.t_us, (unsigned)e.kind);
+    if (written < 0 || (size_t)written >= cap) {
+      trace_dump.active = false;
+      return;
+    }
+    size_t used = (size_t)written;
+    if (e.kind >= EM_TRACE_CS_RISE && e.kind <= EM_TRACE_IDLE) {
+      written = snprintf(trace_dump.line + used, cap - used,
+                         " PINS=0x%X", (unsigned)e.length);
+    } else {
+      written = snprintf(trace_dump.line + used, cap - used,
+                         " LEN_OR_ADC=%u CLASS=0x%X ID=0x%X",
+                         (unsigned)e.length, (unsigned)e.msg_class,
+                         (unsigned)e.id);
+    }
+    if (written < 0 || (size_t)written >= cap - used) {
+      trace_dump.active = false;
+      return;
+    }
+    used += (size_t)written;
+    if (used + 3u + (size_t)e.sample_len * 3u >= cap) {
+      trace_dump.active = false;
+      return;
+    }
+    trace_dump.line[used++] = ' ';
+    trace_dump.line[used++] = 'H';
+    trace_dump.line[used++] = '=';
+    static const char hex[] = "0123456789ABCDEF";
+    for (uint8_t k = 0; k < e.sample_len; ++k) {
+      trace_dump.line[used++] = hex[e.sample[k] >> 4];
+      trace_dump.line[used++] = hex[e.sample[k] & 15u];
+      trace_dump.line[used++] = ' ';
+    }
+    trace_dump.line[used++] = '\n';
+    trace_dump.len = (uint16_t)used;
+    trace_dump.pos = 0;
+  }
+
+  /* Never block waiting for USB space. Main bus work always runs first. */
+  const int space = Serial.availableForWrite();
+  if (space <= 0) return;
+  uint16_t remaining = trace_dump.len - trace_dump.pos;
+  size_t chunk = (size_t)space;
+  if (chunk > 32u) chunk = 32u;
+  if (chunk > remaining) chunk = remaining;
+  const size_t sent = Serial.write(
+      (const uint8_t *)trace_dump.line + trace_dump.pos, chunk);
+  trace_dump.pos += (uint16_t)sent;
+#endif
+}
+
 void mark_trace() {
 #if UKIYO_TECHART_VENDOR_PRESENT
   if (!em_trace_triggered()) {

@@ -168,8 +168,8 @@ void ukiyo_wake_monitor_start(void) {
   wake_watch_enabled = true;
   pinMode(EM_PIN_BODY_CS, INPUT);
   attachInterrupt(digitalPinToInterrupt(EM_PIN_BODY_CS), on_wake_cs, RISING);
-  // Handle the level already high when we switch from normal to wake IRQ.
-  if (digitalRead(EM_PIN_BODY_CS) && !wake_rise_seen) on_wake_cs();
+  // Only a fresh rising edge starts wake. An already HIGH idle line
+  // must not cause a false wake during monitor rearming.
 }
 void ukiyo_wake_monitor_stop(void) {
   wake_watch_enabled = false;
