@@ -107,6 +107,7 @@ void poll() {
     last_supply_state = powered;
     supply_event_known = true;
   }
+  em_trace_pin_probe();
 
   if (mode == Fault) {
     // Retry only after a *confirmed* power-off, never while a failing body
@@ -223,6 +224,8 @@ void status() {
   Serial.print("WAKE_FIRST_ID=0x"); Serial.println(em_wake_first_id, HEX);
   Serial.print("WAKE_AT_MS="); Serial.println(em_t_wake);
   Serial.print("PROTOCOL_TRACE_COUNT="); Serial.println(em_trace_count());
+  Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
+  Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
   Serial.print("PROTOCOL_TRACE_FROZEN="); Serial.println(em_trace_frozen());
   Serial.print("BAD_FRAMES="); Serial.println(em_bad_frames);
   Serial.print("RX_SKIPPED_BYTES="); Serial.println(em_rx_skipped);
@@ -267,15 +270,23 @@ void trace() {
   const uint16_t events = em_trace_count();
   Serial.print("PROTOCOL_TRACE_COUNT="); Serial.println(events);
   Serial.print("PROTOCOL_TRACE_FROZEN="); Serial.println(em_trace_frozen());
+  Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
+  Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
+  Serial.println("PIN_MASK_BITS=BODY_CS:1 BODY_VD:2 BODY_TX_TO_XIAO_RX:4 XIAO_TX_TO_BODY_RX:8 LENS_CS:16");
   for (uint16_t i = 0; i < events; ++i) {
     struct em_trace_event e;
     if (!em_trace_get(i, &e)) break;
     Serial.print("EVT="); Serial.print(i);
     Serial.print(" T_MS="); Serial.print(e.t_ms);
+    Serial.print(" T_US="); Serial.print(e.t_us);
     Serial.print(" KIND="); Serial.print(e.kind);
-    Serial.print(" LEN_OR_ADC="); Serial.print(e.length);
-    Serial.print(" CLASS=0x"); Serial.print(e.msg_class, HEX);
-    Serial.print(" ID=0x"); Serial.print(e.id, HEX);
+    if (e.kind >= EM_TRACE_CS_RISE && e.kind <= EM_TRACE_IDLE) {
+      Serial.print(" PINS=0x"); Serial.print(e.length, HEX);
+    } else {
+      Serial.print(" LEN_OR_ADC="); Serial.print(e.length);
+      Serial.print(" CLASS=0x"); Serial.print(e.msg_class, HEX);
+      Serial.print(" ID=0x"); Serial.print(e.id, HEX);
+    }
     Serial.print(" HEAD=");
     for (uint8_t k = 0; k < e.sample_len; ++k) {
       if (e.sample[k] < 16u) Serial.print('0');
@@ -294,6 +305,22 @@ void trace() {
   }
 #else
   Serial.println("TECHART_TRACE=UNAVAILABLE_NO_VENDOR");
+#endif
+}
+void mark_trace() {
+#if UKIYO_TECHART_VENDOR_PRESENT
+  if (!em_trace_triggered()) {
+    Serial.println("PROTOCOL_TRACE_NOT_TRIGGERED_WAIT_FOR_0x16");
+    return;
+  }
+  if (em_trace_frozen()) {
+    Serial.println("PROTOCOL_TRACE_FROZEN_USE_tr");
+    return;
+  }
+  em_trace_user_mark();
+  Serial.println("PROTOCOL_TRACE_USER_MARK_ADDED");
+#else
+  Serial.println("PROTOCOL_TRACE_UNAVAILABLE");
 #endif
 }
 void clear_trace() {
