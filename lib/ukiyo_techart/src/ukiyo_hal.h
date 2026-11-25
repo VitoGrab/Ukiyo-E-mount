@@ -14,6 +14,14 @@ uint32_t ukiyo_supply_falls(void);
 uint32_t ukiyo_supply_last_on_us(void);
 uint32_t ukiyo_supply_last_off_us(void);
 void ukiyo_bus_abort(void);
+/* A BODY_CS rising interrupt announces a possible wake while UART is off.
+ * Handler asserts LENS_CS; the main loop resumes UART after body TX rises. */
+void ukiyo_wake_monitor_start(void);
+void ukiyo_wake_monitor_stop(void);
+int ukiyo_wake_monitor_triggered(void);
+uint32_t ukiyo_wake_monitor_rise_us(void);
+int ukiyo_body_cs_high(void);
+int ukiyo_body_tx_high(void);
 void ukiyo_gpio_lens_cs(int high);
 void ukiyo_gpio_body_cs_input(void);
 void ukiyo_gpio_body_vd_input(void);
