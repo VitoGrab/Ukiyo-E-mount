@@ -9,5 +9,6 @@ void stop();
 void status();
 void trace();
 void clear_trace();
+void mark_trace();
 bool active();
 } }
