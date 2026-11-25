@@ -1521,12 +1521,12 @@ static void em_trace_store(uint8_t kind, uint16_t length,
     uint8_t is_shutdown;
     volatile struct em_trace_event *e;
 
-    /* Normal 0x03/0x04 traffic and 0x0A keepalives are already understood.
-     * Skip recognizable headers even when a candidate frame is malformed. */
+    /* Skip spam from 0x0A even with malformed candidates. Drop normal
+     * 0x03/0x04 frames only when valid; keep their corrupted counterparts. */
     if (available > 5u &&
-        ((raw[3] == EM_CLASS_INIT && raw[5] == 0x0Au)
-         || (raw[3] == EM_CLASS_NORMAL
-             && (raw[5] == 0x03u || raw[5] == 0x04u)))) {
+        ( (raw[3] == EM_CLASS_INIT && raw[5] == 0x0Au)
+          || (kind == EM_TRACE_VALID && raw[3] == EM_CLASS_NORMAL
+              && (raw[5] == 0x03u || raw[5] == 0x04u)))) {
         return;
     }
     is_shutdown = kind == EM_TRACE_VALID && available > 5u
@@ -1607,7 +1607,9 @@ void em_trace_pin_probe(void)
     if ((uint32_t)(now - g_trace_last_pin_poll_ms) < 20u) return;
     g_trace_last_pin_poll_ms = now;
     mask = em_trace_pin_mask();
-    if (mask != g_trace_last_pins) {
+    /* Do not fill the 128 slots with ordinary frame-sync (VD) toggles. */
+    if (g_trace_last_pins == 0xFFu
+        || ((mask ^ g_trace_last_pins) & (uint8_t)~2u) != 0u) {
         g_trace_last_pins = mask;
         event_kind = EM_TRACE_PINS;
     } else if ((uint32_t)(now - g_trace_last_idle_ms) >= 2000u) {
