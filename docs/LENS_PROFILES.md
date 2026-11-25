@@ -3,7 +3,7 @@
 **Optical profile:** `config/lens_profile.json`  
 **Project/protocol identity:** `config/protocol_identity.json`
 
-The selected lens profile is a separate configuration file. Do not edit Techart's imported packet byte arrays or `emount.h` by hand. Apply the profile after `tools/import_techart.py` and after every edit to the JSON:
+The optical profile and project/protocol identity are separate configuration files. Do not edit Techart's imported packet byte arrays or `emount.h` by hand. Apply the profile after `tools/import_techart.py` and after every edit to either JSON file:
 
 ## Firmware and protocol identity
 
@@ -25,7 +25,7 @@ python3 tools/apply_lens_profile.py
 /opt/platformio/bin/pio run
 ```
 
-The application changes only the vendored `emount.h` lens constants and the template bodies of `em_msg_07` (Sony Lens ID) and `em_msg_3F` (ASCII lens model). It does **not** modify `emount.c`, the GPIO/UART HAL, lens capabilities or session lifecycle. Template structure is checked before writing. The script can be run repeatedly without re-importing Techart.
+The application changes the vendored `emount.h` lens constants and the template bodies of `em_msg_07` (protocol/firmware identity and Sony Lens ID) and `em_msg_3F` (ASCII lens model). It also generates `include/ukiyo-e-mount/version.h` from the same project identity for compile-time monitor output. It does **not** modify `emount.c`, the GPIO/UART HAL, lens capabilities or session lifecycle. Template structure is checked before writing. The script can be run repeatedly without re-importing Techart. `--verify-only` also checks the generated version header.
 
 | Setting | Effect |
 |---|---|

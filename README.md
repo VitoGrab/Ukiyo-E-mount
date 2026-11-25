@@ -23,7 +23,8 @@ to other lenses including zoom lenses.
 | 4.5. Body lifecycle capture | Trace 0x16, sleep/wake, loss of lens rail and remount | Validated short wake, full re-init after removal and runtime capture | Completed on a6000 (2026-11-25) |
 | 4.6. Body-driven autonomous operation | 0x16 electrical shutdown, short wake at 1.5 Mbaud, supply-loss rearm and optional USB trace | Repeated wake, full init, remount, shooting and EXIF | Completed for USB-powered a6000 prototype (2026-11-25); LED/boot refinements in 4.7 |
 | 4.6.1. Protocol identity / EXIF experiment | One project version generates Sony firmware bytes; retain validated E-mount protocol 1.08 | Compare camera Version screen and ARW/JPG EXIF, retaining MF/wake behavior | Compact version 0.42 maps to 04.002; suffix 04.003 observed in a6000 EXIF; capture/session behaviour remains open in issue #3 |
-| 4.7. Protocol and codebase cleanup | Consolidate mode/state handling, remove obsolete bench modes and Techart-specific naming from project-owned code | No regressions against v0.4.2 and autonomous lifecycle tests | Next |
+| 4.6.2. Powerbank autonomy test | XIAO powered from a powerbank, with no PC/USB data connection | Full init, shooting and repeated 0x0B wake work without USB CDC host | Planned |
+| 4.7. Codebase refactor and fast startup | Consolidate state handling, remove obsolete bench modes, minimize pre-ready startup work | Preserve the powerbank baseline; pins are ready early for 0x01 and 0x0B | Planned after 4.6.2 |
 | 4.8. Additional body compatibility | Test a6500 after refactoring; retain a6000 regression suite | Mount, MF, EXIF, sleep/wake and remount pass on both bodies | Planned |
 | 5. Standalone power | Validate XIAO supply from camera rail with regulated/protected power path | Repeated mounts and wake cycles work without USB or backfeeding | Planned |
 | 6. Mechanical integration | Contact PCB and non-destructive mount/adapter packaging | Secure fit, no shorts, optics unaffected | Planned |
@@ -82,14 +83,38 @@ The numbered list below retains the complete long-term acceptance criteria.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
-- `--verify-only` checks that the generated packet sources match the JSON configuration.
+- `--verify-only` checks that the generated packet sources and compile-time version header match the JSON configuration.
+- Monitor startup, `h` help and status output use the generated `h0.42` label; there is no separate version command.
 
-### Stages 4.7-5: cleanup, compatibility and power
+### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
-- Remove obsolete interaction modes and misleading version banners once autonomous behavior is stable. Replace project-owned `techart` names with camera/protocol-neutral names while retaining upstream license, copyright and provenance notices.
-- Separate electrical drivers, frame parsing, request dispatch, session lifecycle, optical profiles and diagnostics; add automated replay/regression tests for a6000 init, status, shutdown and wake traces.
-- Test a6500 **after** refactoring, not as an implicit substitute for a6000 regression coverage.
-- For camera-powered operation, the measured ability to boot XIAO from approximately 3.0 V at `3V3` is promising but **not yet a verified supply design**. Verify board rail direction, regulator backfeed, clock/flash operating limits, peak current, brownout/reset and safe transitions with/without USB before connecting a final power path.
+**Stage 4.6.2 — powerbank test, before refactoring**
+
+- Keep the current firmware and proven USB-powered a6000 behaviour unchanged.
+- Power XIAO from a powerbank through its USB connector, with no PC connected and no USB CDC monitor.
+- Verify cold start, passive listening, full 0x01 initialization, normal photography and lens metadata.
+- Verify camera standby/sleep and repeated short wake through 0x0B, including multiple consecutive cycles.
+- Confirm that disconnecting or reconnecting a PC is not required for operation. A monitor may be attached afterwards for diagnostics, but it must not be part of the tested operating path.
+- Record any startup delay, missed first request, reset, brownout or wake failure before changing the code.
+
+**Stage 4.7 — codebase refactor and startup-path optimization**
+
+- Only after the powerbank baseline passes, consolidate mode/state handling, remove obsolete bench modes and misleading version banners, and replace project-owned Techart-specific names while retaining upstream license, copyright and provenance notices.
+- Separate electrical drivers, frame parsing, request dispatch, session lifecycle, optical profiles and diagnostics; retain replay/regression tests for a6000 init, status, shutdown and wake traces.
+- Prioritize the cold-start path: establish safe pin states and protocol receive readiness as early as possible; avoid USB CDC initialization, diagnostics, delays, unnecessary setup and nonessential subsystem initialization before the first valid body request.
+- Explicitly preserve fast reception and handling of cold-init 0x01 and short-wake 0x0B. The generated version header is compile-time-only and must not add runtime startup work.
+- Re-run the complete powerbank test after each startup-path change. Do not remove a bench facility until its regression coverage has been retained elsewhere.
+
+**Stage 4.8 — additional body compatibility**
+
+- Test a6500 after refactoring, retaining a6000 as the regression baseline.
+- Verify mount, MF, EXIF, sleep/wake and remount on both bodies.
+
+**Stage 5 — camera-rail power**
+
+- Only after the powerbank and startup-refactor stages pass, validate the XIAO supply from the camera rail with a regulated/protected power path.
+- Verify rail direction, regulator backfeed, clock/flash operating limits, peak current, brownout/reset and safe transitions with/without USB before connecting the final power path.
+- Do not connect Sony contact 5 directly to XIAO 3V3 or contact 2 to the XIAO without a regulator and protection review.
 
 ### Technical design decisions
 

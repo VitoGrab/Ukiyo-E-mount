@@ -11,8 +11,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from apply_lens_profile import (  # noqa: E402
-    CONFIG, IDENTITY, VENDOR, ProfileError, apply_to_sources,
-    load_identity, load_profile, parse_project_version,
+    CONFIG, IDENTITY, VENDOR, VERSION_HEADER, ProfileError, apply_to_sources,
+    load_identity, load_profile, parse_project_version, render_version_header,
 )
 
 
@@ -59,6 +59,11 @@ class ProtocolIdentityTests(unittest.TestCase):
         self.assertEqual(parse_project_version("0.50"), (0x05, 0))
         self.assertEqual(parse_project_version("0.410"), (0x04, 10))
         self.assertEqual(parse_project_version("0.4255"), (0x04, 255))
+
+    def test_generated_version_header(self) -> None:
+        expected = render_version_header(self.identity)
+        self.assertEqual(expected, VERSION_HEADER.read_text(encoding='utf-8'))
+        self.assertIn('h0.42', expected)
 
     def test_regeneration_matches_checked_in_files(self) -> None:
         result = apply_to_sources(self.header, self.packets, self.profile, self.identity)

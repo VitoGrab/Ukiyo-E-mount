@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "ukiyo-e-mount/camera_link.h"
 #include "ukiyo-e-mount/frame.h"
+#include "ukiyo-e-mount/version.h"
 
 namespace ukiyoemount {
 namespace camera_link {
@@ -333,7 +334,8 @@ void status() {
     Serial.println("CAMERA_STATUS_DEFERRED_DURING_HANDSHAKE");
     return;
   }
-  Serial.println("=== CAMERA LINK v0.3.1 ===");
+  Serial.print("=== CAMERA LINK "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
+  Serial.println(" ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("UPTIME_US_MOD_2^32="); Serial.println(micros());
   Serial.print("MODE="); Serial.println(!g_running ? "OFF" : g_probe ? "PROBE" : "LISTEN");
@@ -356,7 +358,7 @@ void status() {
   Serial.print("CS_LOW_AT_US="); Serial.println(g_low_at_us);
   Serial.print("CS_LOW_LATENCY_US="); Serial.println(g_low_at_us ? static_cast<uint32_t>(g_low_at_us-g_second_edge_us) : 0u);
   Serial.print("CS_RELEASE_AT_US="); Serial.println(g_release_at_us);
-  Serial.println("EMULATOR_RESPONSES=NOT_IMPLEMENTED_IN_V0.3.1");
+  Serial.println("EMULATOR_RESPONSES=NOT_IMPLEMENTED");
 }
 
 void trace() {

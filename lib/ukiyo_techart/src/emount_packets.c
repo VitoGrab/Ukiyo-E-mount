@@ -38,8 +38,8 @@
  *   0x07 pl[0]        01, native device class -- on an a9 II this enables
  *                     video AF (stills AF then runs as Scans)
  *   0x07 pl[2..3]    E-mount protocol 0x0108 (1.08), a6000-tested
- *   0x07 pl[5]        experimental firmware subversion, default 0x00
- *   0x07 pl[6]        firmware major 0x04 (04), confirmed on a6000
+ *   0x07 pl[5]        firmware suffix from project version (0x02 for h0.42)
+ *   0x07 pl[6]        firmware major 0x04 for h0.42, confirmed on a6000
  *   0x07 pl[9..10]    lens ID 50531 (0xC563), third-party block
  *   0x07 pl[19..22]   zero, as Yongnuo 50 DF: an A7 IV turns this pair into
  *                     the operands of focus record 0x1E (msg_0x07.md)

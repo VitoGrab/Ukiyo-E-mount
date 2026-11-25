@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "ukiyo-e-mount/techart_port.h"
 #include "ukiyo-e-mount/vendor_status.h"
+#include "ukiyo-e-mount/version.h"
 #if UKIYO_TECHART_VENDOR_PRESENT
 extern "C" {
 #include "emount.h"
@@ -285,7 +286,8 @@ void poll() {
 }
 
 void status() {
-  Serial.println("=== TECHART PORT v0.4.1 ===");
+  Serial.print("=== TECHART PORT "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
+  Serial.println(" ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("MODE=");
   switch (mode) {

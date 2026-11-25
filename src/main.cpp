@@ -7,9 +7,10 @@
 #include "ukiyo-e-mount/bench.h"
 #include "ukiyo-e-mount/camera_link.h"
 #include "ukiyo-e-mount/techart_port.h"
+#include "ukiyo-e-mount/version.h"
 
-// v0.4.1: auto-arm Techart before USB CDC; drive camera outputs only after
-// qualified LOGIC_VCC. Diagnostic and bench modes remain manually selectable.
+// Auto-arm the camera protocol before USB CDC; qualify LOGIC_VCC before driving outputs.
+// Diagnostics and bench modes remain manually selectable.
 
 namespace {
 
@@ -186,7 +187,8 @@ void negative_session_test() {
 }
 
 void print_status() {
-  Serial.println("=== ukiyoemount v0.4.1 BENCH / CAMERA / TECHART ===");
+  Serial.print("=== UKIYO-E-MOUNT "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
+  Serial.println(" BENCH / CAMERA / TECHART ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("UART_BAUD="); Serial.println(kUartBaud);
   Serial.print("UART_MODE="); Serial.println(uart_mode ? "LOOPBACK" : "DISABLED");
@@ -238,6 +240,7 @@ void handle_command(const char* cmd) {
   else if (!strcmp(cmd, "x")) cmd = "camera stop";
   else if (!strcmp(cmd, "e")) cmd = "camera emulate";
   if (!strcmp(cmd, "help")) {
+    Serial.print("UKIYO-E-MOUNT "); Serial.println(UKIYO_PROJECT_VERSION_LABEL);
     Serial.println("Short camera commands: l=listen, p=probe, e=rearm, s=status, t=trace dump, tr=clear, tm=mark attempt, x=stop, h=help.");
     Serial.println("Auto emulation is armed at boot; x disables it until e or reset.");
     Serial.println("Commands: help, status, proto, session a6000, session a9ii, session faults, uart on, uart off, bench gpio, bench a6000, bench a9ii, camera listen, camera probe, camera emulate, camera status, camera trace, camera stop");
@@ -371,7 +374,8 @@ void loop() {
   }
   if (Serial && !banner_printed) {
     banner_printed = true;
-    Serial.println("ukiyoemount v0.4.1 READY / AUTO-ARMED");
+    Serial.print("UKIYO-E-MOUNT "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
+    Serial.println(" READY / AUTO-ARMED");
     Serial.println("Type h, l, p, e, s, t or x. x disables auto-arm; e re-enables.");
   }
   poll_command();
