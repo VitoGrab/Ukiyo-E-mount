@@ -17,19 +17,20 @@ to other lenses including zoom lenses.
 |---|---|---|---|
 | 0. Board validation | XIAO USB upload, monitoring, 750 kbaud D6/D7 loopback | Tests pass without camera | Completed |
 | 1. Protocol workbench | Frame encoder/parser, checksum, identity fixture, host regression tests | Offline protocol tests pass | Completed |
-| 2. Safe bus bring-up | Electrical validation, body CS capture, clock/baud, high-Z shutdown | Stable a6000 handshake and no unintended bus drive | Validated on a6000; lifecycle improvements pending |
+| 2. Safe bus bring-up | Electrical validation, body CS capture, clock/baud, safe shutdown | Stable a6000 handshake and no unintended bus drive | Completed on a6000 |
 | 3. Native manual-lens emulation | Handshake, 1.5 Mbaud, native MF responses, focus aids | a6000 forces MF, takes pictures, Focus Magnifier and Peaking operate | Completed on a6000 (v0.4.2) |
 | 4. EXIF verification | Helios 44M-4 profile, 58 mm, f/2 nameplate, configurable reported aperture | ARW reports correct lens identity, focal length, aperture and MF | Completed on a6000 (v0.4.2) |
-| 4.5. Body lifecycle capture | Trace power-off (0x16), idle, sleep/wake, remount and hot-unplug with body still on | Captures distinguish shutdown, sleep and disconnection; 0x0A cadence established | **Next** |
-| 4.6. Body-driven autonomous operation | Passive boot/listen, reactive handshake, re-arm, timeout recovery, LED state indicator | All six autonomous acceptance tests below pass without USB monitor | Planned |
-| 4.7. Protocol and codebase cleanup | Consolidate mode/state handling, remove obsolete bench modes and Techart-specific naming from project-owned code | No regressions against v0.4.2 and autonomous lifecycle tests | Planned |
+| 4.5. Body lifecycle capture | Trace 0x16, sleep/wake, loss of lens rail and remount | Validated short wake, full re-init after removal and runtime capture | Completed on a6000 (2026-11-25) |
+| 4.6. Body-driven autonomous operation | 0x16 electrical shutdown, short wake at 1.5 Mbaud, supply-loss rearm and optional USB trace | Repeated wake, full init, remount, shooting and EXIF | Completed for USB-powered a6000 prototype (2026-11-25); LED/boot refinements in 4.7 |
+| 4.6.1. Protocol identity / EXIF experiment | Report Ukiyo 0.4 and E-mount protocol 1.31 in message 0x07 | Camera Version screen and ARW/JPG EXIF checked without MF regression | Awaiting a6000 test |
+| 4.7. Protocol and codebase cleanup | Consolidate mode/state handling, remove obsolete bench modes and Techart-specific naming from project-owned code | No regressions against v0.4.2 and autonomous lifecycle tests | Next |
 | 4.8. Additional body compatibility | Test a6500 after refactoring; retain a6000 regression suite | Mount, MF, EXIF, sleep/wake and remount pass on both bodies | Planned |
 | 5. Standalone power | Validate XIAO supply from camera rail with regulated/protected power path | Repeated mounts and wake cycles work without USB or backfeeding | Planned |
 | 6. Mechanical integration | Contact PCB and non-destructive mount/adapter packaging | Secure fit, no shorts, optics unaffected | Planned |
 | 7. Aperture sensing (extra) | Analog lever sensor or manual control | Reliable reported aperture values | Future |
 | 8. Extras | I2C sensors, lens position, optional ranging/AF experiments | Separate proof-of-concept tests | Future |
 
-### Stage 4.5: characterize the body lifecycle
+### Stage 4.5: characterized body lifecycle (a6000; completed 2026-11-25)
 
 Record the **actual bus traffic** rather than treating power as a session trigger:
 
@@ -42,7 +43,7 @@ Record the **actual bus traffic** rather than treating power as a session trigge
 
 The observation that approximately 3.2 V may persist for one or two minutes after camera power-off is **experimental evidence**, not a reliable session signal. A `0x0A` timeout must only indicate detachment after active/sleep cadence has been characterized.
 
-### Stage 4.6: body-driven autonomous operation
+### Stage 4.6: body-driven autonomous operation (core a6000 tests completed)
 
 Target states: `LISTENING` -> `NEGOTIATING` -> `RUNNING` -> `LISTENING`, with explicit `SUSPENDED` (if required by sleep captures) and recoverable error paths.
 
@@ -57,12 +58,37 @@ Target states: `LISTENING` -> `NEGOTIATING` -> `RUNNING` -> `LISTENING`, with ex
 
 **Autonomous acceptance tests:**
 
+The essential USB-powered prototype lifecycle was validated on a6000: 0x16
+shutdown, short wake via 0x0B at retained 1.5 Mbaud, repeated sleep/wake,
+full cold 0x01 after lens-rail loss, photography and correct Helios EXIF.
+USB monitoring remains optional. Pure voltage-independent cold boot, strict
+USB timing guarantees, and state-driven LED behavior are hardening/cleanup
+tasks for Stage 4.7; standalone camera-rail power remains Stage 5.
+The numbered list below retains the complete long-term acceptance criteria.
+
 1. Flash/reset XIAO -> `LISTENING` immediately, even with camera rail still high; no USB monitor required.
 2. Attach or power on body -> first validated initiation (normally `0x01`) starts handshake and reaches `RUNNING`.
 3. Continue normal camera use until confirmed `0x16` or supported keepalive-loss detection; release lines safely.
 4. Camera power cycle, sleep/wake and reconnection all restore shooting without reflashing or entering a serial command.
 5. USB monitoring remains strictly observational and can be attached/detached at any time.
 6. LED indicates connection lifecycle consistently without disrupting timing.
+
+### Stage 4.6.1: firmware and E-mount protocol identity (experimental)
+
+- `config/protocol_identity.json` is the project-wide source of truth for
+  the advertised identity, independent of the Helios lens profile.
+- `tools/apply_lens_profile.py` generates message `0x07` identity fields:
+  `pl[2..3] = 31 01` (E-mount protocol 1.31) and `pl[6] = 04`
+  (single-byte BCD firmware 0.4). The full project version 0.4.2 is
+  not representable in this byte and is recorded separately.
+- The camera currently displays Lens Ver.22 for payload `0x22`.
+  How it displays `0x04`, and whether ARW/JPG MakerNotes gain
+  `LensE-mountVersion` or `LensFirmwareVersion`, require camera testing.
+- This protocol bump is an experiment: confirm cold startup, short wake,
+  native MF, picture capture and Helios EXIF again. Revert the protocol
+  field alone to 1.08 if the body changes its requests or behaves abnormally.
+- Test with `exiftool -G1 -s -LensE-mountVersion -LensFirmwareVersion
+  -LensModel -LensInfo -LensType2 <image.ARW>` (replace the placeholder).
 
 ### Stages 4.7-5: cleanup, compatibility and power
 
