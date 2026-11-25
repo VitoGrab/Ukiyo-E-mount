@@ -61,41 +61,34 @@ def load_profile(path: pathlib.Path) -> dict:
     return p
 
 
-def parse_firmware_version(value: str) -> tuple[int, int]:
-    """Return (major BCD byte, experimental minor byte) for XX.YYY.
+def parse_project_version(value: str) -> tuple[int, int]:
+    """Decode compact project notation into Sony's two firmware-version bytes.
 
-    ExifTool renders the Sony MakerNote version as Ver.%.2x.%.3d.
-    The mapping pl[6] -> major has been confirmed on an a6000;
-    the pl[5] -> minor mapping has NOT been confirmed.
+    Examples: 0.42 -> major 0x04, suffix 2; 0.50 -> major 0x05, suffix 0.
+    The first digit after the decimal point is the Sony major byte; the
+    remaining one-to-three digits are the decimal suffix byte (0..255).
+    ExifTool renders these bytes as Ver.%.2x.%.3d.
     """
-    match = re.fullmatch(r'([0-9]{2})\.([0-9]{3})', value) if isinstance(value, str) else None
+    match = re.fullmatch(r'0\.([1-9])([0-9]{1,3})', value) if isinstance(value, str) else None
     if not match:
-        raise ProfileError('lens_firmware_version must be XX.YYY (e.g. 04.002)')
+        raise ProfileError('project_version must use compact 0.MP notation (e.g. 0.42)')
+    major = int(match.group(1), 10)
     minor = int(match.group(2), 10)
     if minor > 255:
-        raise ProfileError('lens_firmware_version suffix must be 000..255 (one byte)')
-    return int(match.group(1), 16), minor
+        raise ProfileError('project_version suffix must be 000..255 (one byte)')
+    return major, minor
 
 
 def load_identity(path: pathlib.Path) -> dict:
-    """Validate the project-wide firmware and E-mount protocol identity.
-
-    The camera firmware version is expressed as XX.YYY. The confirmed
-    major field is 0x07 pl[6] (two packed decimal digits). pl[5] is an
-    EXPERIMENTAL candidate for the three-digit EXIF suffix, constrained
-    to 000..255 because it occupies one byte. The 16-bit E-mount
-    protocol revision is a separate, independently validated field.
-    """
+    """Validate the single project version and E-mount protocol identity."""
     try:
         p = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
         raise ProfileError(f'Cannot read protocol identity {path}: {exc}') from exc
-    expected = {'project_version', 'lens_firmware_version', 'emount_protocol_version'}
+    expected = {'project_version', 'emount_protocol_version'}
     if set(p) != expected or not all(isinstance(p[key], str) for key in expected):
         raise ProfileError(f'Protocol identity requires exactly these string keys: {sorted(expected)}')
-    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', p['project_version']):
-        raise ProfileError('project_version must be MAJOR.MINOR.PATCH')
-    firmware_major, firmware_minor = parse_firmware_version(p['lens_firmware_version'])
+    firmware_major, firmware_minor = parse_project_version(p['project_version'])
     protocol = re.fullmatch(r'([0-9]{1,2})\.([0-9]{2})', p['emount_protocol_version'])
     if not protocol:
         raise ProfileError('emount_protocol_version must be MAJOR.TWO_DIGIT_MINOR')
@@ -105,8 +98,8 @@ def load_identity(path: pathlib.Path) -> dict:
     if major > 0xFF:
         raise ProfileError('emount_protocol_version major exceeds 8-bit field')
     minor_digits = protocol.group(2)
-    p['lens_firmware_major_bcd'] = firmware_major
-    p['lens_firmware_minor_candidate'] = firmware_minor
+    p['lens_firmware_major_byte'] = firmware_major
+    p['lens_firmware_minor_byte'] = firmware_minor
     p['emount_protocol_u16'] = (
         (major << 8) | (int(minor_digits[0]) << 4) | int(minor_digits[1])
     )
@@ -176,8 +169,8 @@ def apply_to_sources(header: str, packets: str, profile: dict, identity: dict) -
         # Message 0x07, absolute offsets = payload indices + 6.
         protocol = identity['emount_protocol_u16']
         data[8], data[9] = protocol & 0xff, protocol >> 8  # pl[2..3], u16 LE
-        data[11] = identity['lens_firmware_minor_candidate']  # pl[5], UNVERIFIED
-        data[12] = identity['lens_firmware_major_bcd']  # pl[6], confirmed BCD major
+        data[11] = identity['lens_firmware_minor_byte']  # pl[5], empirically observed EXIF suffix
+        data[12] = identity['lens_firmware_major_byte']  # pl[6], confirmed major byte
         data[15], data[16] = lens_id & 0xff, lens_id >> 8  # pl[9..10]
 
     def patch_3f(data: list[int]):
@@ -194,18 +187,11 @@ def main() -> int:
     argp = argparse.ArgumentParser(description=__doc__)
     argp.add_argument('--config', type=pathlib.Path, default=CONFIG)
     argp.add_argument('--identity', type=pathlib.Path, default=IDENTITY)
-    argp.add_argument('--lens-firmware-version', metavar='XX.YYY',
-                      help='Temporary override for this run (does not edit the JSON identity)')
     argp.add_argument('--verify-only', action='store_true', help='Validate profile and source format; do not edit')
     args = argp.parse_args()
     try:
         p = load_profile(args.config)
         identity = load_identity(args.identity)
-        if args.lens_firmware_version is not None:
-            major, minor = parse_firmware_version(args.lens_firmware_version)
-            identity['lens_firmware_version'] = args.lens_firmware_version
-            identity['lens_firmware_major_bcd'] = major
-            identity['lens_firmware_minor_candidate'] = minor
         hdr_file = VENDOR / 'emount.h'
         packets_file = VENDOR / 'emount_packets.c'
         original_hdr = hdr_file.read_text(encoding='utf-8')
@@ -226,11 +212,10 @@ def main() -> int:
         print('APERTURE_MIN_F=' + str(p['aperture_min_f']))
         print('APERTURE_NOW_F=' + str(p['aperture_now_f']) + ' (fixed until sensing)')
         print('PROJECT_VERSION=' + identity['project_version'])
-        print('LENS_FIRMWARE=' + identity['lens_firmware_version'])
-        print('LENS_FIRMWARE_WIRE=pl[5]=0x%02X (UNVERIFIED suffix), pl[6]=0x%02X (confirmed major)' %
-              (identity['lens_firmware_minor_candidate'], identity['lens_firmware_major_bcd']))
-        if args.lens_firmware_version is not None:
-            print('LENS_FIRMWARE_OVERRIDE=YES (config/protocol_identity.json unchanged)')
+        print('LENS_FIRMWARE_EXIF=Ver.%02X.%03d' %
+              (identity['lens_firmware_major_byte'], identity['lens_firmware_minor_byte']))
+        print('LENS_FIRMWARE_WIRE=pl[5]=0x%02X (observed suffix), pl[6]=0x%02X (major)' %
+              (identity['lens_firmware_minor_byte'], identity['lens_firmware_major_byte']))
         print('EMOUNT_PROTOCOL=' + identity['emount_protocol_version']
               + ' (0x%04X)' % identity['emount_protocol_u16'])
         print('SOURCE_CHECK=PASS')

@@ -1,8 +1,23 @@
 # Lens profiles
 
-**Authoritative profile:** `config/lens_profile.json`
+**Optical profile:** `config/lens_profile.json`  
+**Project/protocol identity:** `config/protocol_identity.json`
 
 The selected lens profile is a separate configuration file. Do not edit Techart's imported packet byte arrays or `emount.h` by hand. Apply the profile after `tools/import_techart.py` and after every edit to the JSON:
+
+## Firmware and protocol identity
+
+`config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision. The compact version notation maps directly to the two Sony lens-firmware bytes:
+
+| Project version | `0x07 pl[6]` (major) | `0x07 pl[5]` (suffix) | ExifTool representation |
+|---|---:|---:|---|
+| `0.42` | `0x04` | `0x02` | `Ver.04.002` |
+| `0.50` | `0x05` | `0x00` | `Ver.05.000` |
+
+The suffix is one byte (0–255). `pl[6]` is the observed major field; the `pl[5]` suffix mapping has been observed in a6000 ExifTool output (including `Ver.04.003`). The body-side timing/cache behaviour that makes these MakerNote tags appear only on some captures remains under open issue [#3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3).
+
+`emount_protocol_version` remains `1.08`; the earlier 1.31 experiment did not provide a reason to change the validated protocol baseline. The generator derives both firmware bytes from `project_version` and recalculates the `0x07` checksum. Do not maintain a separate lens-firmware version value.
+
 
 ```bash
 python3 tools/apply_lens_profile.py --verify-only
