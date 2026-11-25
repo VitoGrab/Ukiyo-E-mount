@@ -207,6 +207,11 @@ extern volatile uint8_t em_reset_wanted;
  * and then calls em_sleep_until_wake. */
 void em_set_powerdown_handler(void (*fn)(void));
 
+/* Body-driven, nonblocking XIAO standby integration. These functions keep
+ * the negotiated link speed and lens identity across a short wake. */
+void em_suspend_begin(void);
+void em_suspend_woke(void);
+
 /* Status frames only, no reply dispatch.  This is what a nested em_poll()
  * becomes: the park runs inside em_poll, and its servo loop pumps em_poll
  * again, which would otherwise re-enter the reply path and park recursively. */

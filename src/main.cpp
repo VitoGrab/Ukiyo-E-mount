@@ -376,5 +376,6 @@ void loop() {
   }
   poll_command();
   poll_uart();
+  ukiyoemount::techart::poll_trace();
   ukiyoemount::camera_link::poll();
 }

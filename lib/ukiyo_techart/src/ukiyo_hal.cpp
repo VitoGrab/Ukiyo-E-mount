@@ -7,6 +7,7 @@
 extern "C" {
 #include "em_uart.h"
 #include "em_eic.h"
+#include "emount.h"
 }
 #include "ukiyo_hal.h"
 #include "ukiyo-e-mount/supply_gate.h"
@@ -17,6 +18,9 @@ volatile uint16_t rx_head = 0;
 volatile uint16_t rx_tail = 0;
 volatile bool uart_enabled = false;
 volatile bool callbacks_enabled = false;
+volatile bool wake_watch_enabled = false;
+volatile bool wake_rise_seen = false;
+volatile uint32_t wake_rise_us = 0;
 volatile uint32_t configured_baud = 750000u;
 volatile bool supply_good_cached = false;
 ukiyoemount::SupplyGate supply_gate;
@@ -66,6 +70,15 @@ void on_cs() {
 }
 void on_vd() {
   if (callbacks_enabled && vd_handler) vd_handler();
+}
+/* Pin-level wake runs before any UART frame. Never start Serial1 in ISR. */
+void on_wake_cs() {
+  if (!wake_watch_enabled || wake_rise_seen || !supply_good_cached) return;
+  wake_rise_seen = true;
+  wake_rise_us = micros();
+  digitalWrite(EM_PIN_LENS_CS, HIGH);
+  pinMode(EM_PIN_LENS_CS, OUTPUT);
+  em_trace_cs_edge(1);
 }
 }  // namespace
 
@@ -148,6 +161,26 @@ void em_eic_resume(void) {
   attachInterrupt(digitalPinToInterrupt(EM_PIN_BODY_CS), on_cs, CHANGE);
   attachInterrupt(digitalPinToInterrupt(EM_PIN_BODY_VD), on_vd, RISING);
 }
+void ukiyo_wake_monitor_start(void) {
+  detachInterrupt(digitalPinToInterrupt(EM_PIN_BODY_CS));
+  wake_rise_seen = false;
+  wake_rise_us = 0;
+  wake_watch_enabled = true;
+  pinMode(EM_PIN_BODY_CS, INPUT);
+  attachInterrupt(digitalPinToInterrupt(EM_PIN_BODY_CS), on_wake_cs, RISING);
+  // Only a fresh rising edge starts wake. An already HIGH idle line
+  // must not cause a false wake during monitor rearming.
+}
+void ukiyo_wake_monitor_stop(void) {
+  wake_watch_enabled = false;
+  detachInterrupt(digitalPinToInterrupt(EM_PIN_BODY_CS));
+  wake_rise_seen = false;
+}
+int ukiyo_wake_monitor_triggered(void) { return wake_rise_seen; }
+uint32_t ukiyo_wake_monitor_rise_us(void) { return wake_rise_us; }
+int ukiyo_body_cs_high(void) { return digitalRead(EM_PIN_BODY_CS); }
+int ukiyo_body_tx_high(void) { return digitalRead(EM_PIN_RX); }
+
 void em_eic_sleep_until_cs_high(void) {
   // No low-power standby: USB must remain online for diagnostics.
   while (!digitalRead(EM_PIN_BODY_CS) && ukiyo_supply_ok()) delayMicroseconds(50);
@@ -203,6 +236,7 @@ void ukiyo_gpio_tx_output(void) {
 }
 void ukiyo_gpio_tx_unmux(void) { /* end() removed the UART peripheral mux */ }
 void ukiyo_bus_abort(void) {
+  ukiyo_wake_monitor_stop();
   em_eic_pause();
   em_uart_disable();
   // Preserve the qualified ADC state: forcing it LOW here would make the
