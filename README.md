@@ -55,16 +55,16 @@ Target states: `LISTENING` -> `NEGOTIATING` -> `RUNNING` -> `LISTENING`, with ex
 - On confirmed `0x16` shutdown, release driven lines, clear per-session queues/timers/status and return to passive listening. Where sleep is confirmed, suspend/resume instead of falsely disconnecting.
 - Implement a configurable, evidence-based loss-of-traffic watchdog (initially considering `0x0A`) only in states where keepalive is expected. Reset parser, link state and baud appropriately before accepting a new session.
 - Keep USB serial as optional, nonblocking diagnostics only: status, state transitions, trace counters and protocol errors. Unplugging USB/closing the monitor must not change behavior.
-- Drive the onboard active-low LED from **state**, without high-frequency changes on every CS edge: off in `LISTENING`, short blink while initiating, steady on in `RUNNING`, off after shutdown/loss (optional bounded error pattern). LED and debug operations must not delay the bus.
+- Use compile-time LED modes: debug builds show VCC on the User LED and pulse RX/TX LEDs on received/transmitted protocol frames; production builds keep all GPIO-controlled LEDs off. RX/TX pins stay high-impedance between pulses to avoid false USB CDC activity indications.
 
 **Autonomous acceptance tests:**
 
 The essential USB-powered prototype lifecycle was validated on a6000: 0x16
 shutdown, short wake via 0x0B at retained 1.5 Mbaud, repeated sleep/wake,
 full cold 0x01 after lens-rail loss, photography and correct Helios EXIF.
-USB monitoring remains optional. Pure voltage-independent cold boot, strict
-USB timing guarantees, and state-driven LED behavior are hardening/cleanup
-tasks for Stage 4.7; standalone camera-rail power remains Stage 5.
+USB monitoring remains optional. Pure voltage-independent cold boot and strict
+USB timing guarantees remain hardening/cleanup tasks for Stage 4.7. Compile-time
+debug/production LED modes are implemented; standalone camera-rail power remains Stage 5.
 The numbered list below retains the complete long-term acceptance criteria.
 
 1. Flash/reset XIAO -> `LISTENING` immediately, even with camera rail still high; no USB monitor required.
@@ -72,13 +72,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 3. Continue normal camera use until confirmed `0x16` or supported keepalive-loss detection; release lines safely.
 4. Camera power cycle, sleep/wake and reconnection all restore shooting without reflashing or entering a serial command.
 5. USB monitoring remains strictly observational and can be attached/detached at any time.
-6. LED indicates connection lifecycle consistently without disrupting timing.
+6. Debug LED indications reflect VCC and protocol-frame activity without disrupting timing; production builds keep GPIO-controlled LEDs off.
 
 ### Stage 4.6.1: firmware and E-mount protocol identity
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.42`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.42` -> `pl[6]=0x04`, `pl[5]=0x02`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The current project version is `0.46`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.46` -> `pl[6]=0x04`, `pl[5]=0x06`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
 - The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.002`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
@@ -117,6 +117,14 @@ The numbered list below retains the complete long-term acceptance criteria.
 - Do not connect Sony contact 5 directly to XIAO 3V3 or contact 2 to the XIAO without a regulator and protection review.
 
 ### Technical design decisions
+
+### XIAO LED build modes
+
+- `pio run -e seeed_xiao` builds the debug configuration (default).
+- `pio run -e seeed_xiao_production` builds the production configuration.
+- Add `-t upload` to either command to flash that exact build.
+
+Debug mode: User LED is solid while LOGIC_VCC is detected; RX and TX LEDs pulse for received body frames and transmitted emulator responses. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
 
 - Keep the proven PlatformIO `seeed_xiao` board configuration.
 - Use USB CDC only for diagnostics in early stages. Never put diagnostic

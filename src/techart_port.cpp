@@ -50,6 +50,100 @@ uint32_t boot_setup_entry_ms = 0;
 uint32_t boot_pins_ready_ms = 0;
 uint32_t boot_setup_done_ms = 0;
 
+#if !defined(LED_BUILTIN) || !defined(PIN_LED_RXL) || !defined(PIN_LED_TXL)
+#error "The selected board must expose XIAO SAMD21 LED pin definitions"
+#endif
+
+constexpr uint8_t kLedUserPin = LED_BUILTIN;
+constexpr uint8_t kLedRxPin = PIN_LED_RXL;
+constexpr uint8_t kLedTxPin = PIN_LED_TXL;
+constexpr uint32_t kLedActivityPulseMs = 50u;
+bool led_vcc_on = false;
+
+#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+uint32_t led_last_rx_frames = 0;
+uint32_t led_last_tx_frames = 0;
+uint32_t led_rx_until_ms = 0;
+uint32_t led_tx_until_ms = 0;
+bool led_rx_active = false;
+bool led_tx_active = false;
+#endif
+
+// RX/TX are also used by the SAMD USB CDC core. Keep them high-impedance
+// between camera activity pulses so USB traffic cannot create false indications.
+void led_release(uint8_t pin) {
+  pinMode(pin, INPUT);
+  digitalWrite(pin, LOW);  // INPUT + LOW disables the internal pull-up.
+}
+
+void status_leds_init_internal() {
+  digitalWrite(kLedUserPin, HIGH);
+  pinMode(kLedUserPin, OUTPUT);
+  led_release(kLedRxPin);
+  led_release(kLedTxPin);
+  led_vcc_on = false;
+#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+  led_last_rx_frames = em_frames_rx;
+  led_last_tx_frames = em_frames_tx;
+  led_rx_until_ms = 0;
+  led_tx_until_ms = 0;
+  led_rx_active = false;
+  led_tx_active = false;
+#endif
+}
+
+void status_leds_all_off() {
+  digitalWrite(kLedUserPin, HIGH);
+  pinMode(kLedUserPin, OUTPUT);
+  led_release(kLedRxPin);
+  led_release(kLedTxPin);
+  led_vcc_on = false;
+#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+  led_last_rx_frames = em_frames_rx;
+  led_last_tx_frames = em_frames_tx;
+  led_rx_until_ms = 0;
+  led_tx_until_ms = 0;
+  led_rx_active = false;
+  led_tx_active = false;
+#endif
+}
+
+#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+void update_activity_led(uint8_t pin, uint32_t frames,
+                         uint32_t& last_frames, uint32_t& active_until_ms,
+                         bool& active, uint32_t now_ms) {
+  if (frames != last_frames) {
+    last_frames = frames;
+    active_until_ms = now_ms + kLedActivityPulseMs;
+  }
+
+  const bool should_be_on =
+      static_cast<int32_t>(active_until_ms - now_ms) > 0;
+  if (should_be_on && !active) {
+    digitalWrite(pin, LOW);  // Set the active-low output latch before enabling it.
+    pinMode(pin, OUTPUT);
+    active = true;
+  } else if (!should_be_on && active) {
+    led_release(pin);
+    active = false;
+  }
+}
+
+void status_leds_update(bool vcc_detected) {
+  if (led_vcc_on != vcc_detected) {
+    digitalWrite(kLedUserPin, vcc_detected ? LOW : HIGH);
+    led_vcc_on = vcc_detected;
+  }
+
+  const uint32_t now_ms = millis();
+  update_activity_led(kLedRxPin, em_frames_rx, led_last_rx_frames,
+                      led_rx_until_ms, led_rx_active, now_ms);
+  update_activity_led(kLedTxPin, em_frames_tx, led_last_tx_frames,
+                      led_tx_until_ms, led_tx_active, now_ms);
+}
+#endif
+
+
 #if UKIYO_TECHART_VENDOR_PRESENT
 /* After the 0x16 ACK, immediately release UART TX and signal LOW.
  * Do not print or wait here: the camera is polling its lens RX line. */
@@ -87,6 +181,8 @@ void log_mode(const char* what) {
 }  // namespace
 
 bool active() { return mode != Off; }
+
+void status_leds_init() { status_leds_init_internal(); }
 
 // Called by setup() before USB CDC is initialized. There is no 30-second arm
 // timeout: this is the normal, persistent operating state of a lens adapter.
@@ -129,6 +225,7 @@ void stop() {
 #if UKIYO_TECHART_VENDOR_PRESENT
   ukiyo_bus_abort();
 #endif
+  status_leds_all_off();
   automatic_enabled = false;
   mode = Off;
   Serial.println("TECHART_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z");
@@ -139,6 +236,9 @@ void poll() {
 #if UKIYO_TECHART_VENDOR_PRESENT
   if (mode == Off) return;
   const bool powered = ukiyo_supply_ok();
+#if UKIYO_DEBUG_LEDS
+  status_leds_update(powered);
+#endif
   if (!supply_event_known || powered != last_supply_state) {
     em_trace_supply(powered ? 1u : 0u, ukiyo_supply_adc());
     last_supply_state = powered;
@@ -260,6 +360,9 @@ void poll() {
     return;
   }
   em_poll();
+#if UKIYO_DEBUG_LEDS
+  status_leds_update(powered);
+#endif
   if (mode != Running) return; // A 0x16 can transition to standby.
 
   // Keepalive 0x0A is deliberately silent; all counters remain in 's'.

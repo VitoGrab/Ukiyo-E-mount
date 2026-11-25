@@ -31,8 +31,6 @@ uint8_t loop_match = 0;
 uint32_t loop_frames = 0;
 uint32_t loop_sent = 0;
 uint32_t last_tx = 0;
-uint32_t last_led = 0;
-bool led_on = false;
 
 void safe_pins() {
   pinMode(kPinVd, INPUT);
@@ -354,11 +352,9 @@ void setup() {
   safe_pins();
   // Set the supply gate and persistent standby BEFORE initializing USB CDC.
   ukiyoemount::techart::boot_auto_arm(sketch_entry_ms, millis());
-  pinMode(LED_BUILTIN, OUTPUT);
-  led_on = true;
-  last_led = millis();
-  digitalWrite(LED_BUILTIN, LOW);  // Visible as soon as sketch starts (active-low).
   Serial.begin(115200);  // No wait for Serial or USB host.
+  // USB CDC configures the XIAO RX/TX LEDs; apply our selected LED policy afterwards.
+  ukiyoemount::techart::status_leds_init();
   ukiyoemount::techart::record_setup_done(millis());
 }
 
@@ -366,12 +362,6 @@ void loop() {
   // Service the camera first; USB and LED are lower-priority diagnostics.
   ukiyoemount::techart::poll();
   ukiyoemount::camera_link::poll();
-  const uint32_t now = millis();
-  if (!ukiyoemount::camera_link::timing_critical() && now - last_led >= 500) {
-    last_led = now;
-    led_on = !led_on;
-    digitalWrite(LED_BUILTIN, led_on ? LOW : HIGH);
-  }
   if (Serial && !banner_printed) {
     banner_printed = true;
     Serial.print("UKIYO-E-MOUNT "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);

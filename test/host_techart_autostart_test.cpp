@@ -52,12 +52,20 @@ int main() {
   using namespace ukiyoemount::techart;
   assert(!active());
   boot_auto_arm(0, 1);
+  status_leds_init();  // Mirrors setup() after Serial.begin().
   record_setup_done(2);
+  assert(mock::modes[LED_BUILTIN] == OUTPUT && mock::pins[LED_BUILTIN] == HIGH);
+  assert(mock::modes[PIN_LED_RXL] == INPUT && mock::modes[PIN_LED_TXL] == INPUT);
   assert(active());
   poll();                          // no camera power; stay armed indefinitely
   assert(init_calls == 0);
   powered = true;
   poll();
+#if UKIYO_DEBUG_LEDS
+  assert(mock::pins[LED_BUILTIN] == LOW);  // Solid User LED = body VCC detected.
+#else
+  assert(mock::pins[LED_BUILTIN] == HIGH); // Production keeps the User LED off.
+#endif
   assert(init_calls == 1);
   assert(Serial.log.find("RUNNING_PROTOCOL_ENGINE") != std::string::npos);
   Serial.log.clear();
@@ -67,8 +75,18 @@ int main() {
   assert(Serial.log.find("PROTO_RX") == std::string::npos);  // keepalive quiet
   em_last_id = 0x35;
   em_frames_rx = 43;
+  em_frames_tx = 17;
   poll();
   assert(Serial.log.find("ID=0x35") != std::string::npos);
+#if UKIYO_DEBUG_LEDS
+  assert(mock::modes[PIN_LED_RXL] == OUTPUT && mock::pins[PIN_LED_RXL] == LOW);
+  assert(mock::modes[PIN_LED_TXL] == OUTPUT && mock::pins[PIN_LED_TXL] == LOW);
+  mock::tick += 60;
+  poll();
+  assert(mock::modes[PIN_LED_RXL] == INPUT && mock::modes[PIN_LED_TXL] == INPUT);
+#else
+  assert(mock::modes[PIN_LED_RXL] == INPUT && mock::modes[PIN_LED_TXL] == INPUT);
+#endif
   powered = false;
   poll();
   assert(abort_calls == 1);
@@ -79,6 +97,8 @@ int main() {
   assert(init_calls == 2);
   stop();
   assert(!active());
+  assert(mock::pins[LED_BUILTIN] == HIGH);
+  assert(mock::modes[PIN_LED_RXL] == INPUT && mock::modes[PIN_LED_TXL] == INPUT);
   poll();
   assert(init_calls == 2);        // x must prevent any automatic restart
   assert(arm());

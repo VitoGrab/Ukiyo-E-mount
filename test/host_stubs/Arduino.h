@@ -12,6 +12,8 @@
 #define LOW 0
 #define HEX 16
 #define LED_BUILTIN 13
+#define PIN_LED_RXL 12
+#define PIN_LED_TXL 11
 #define CHANGE 3
 #define RISING 4
 namespace mock { extern void (*irq_handlers[32])(); }
