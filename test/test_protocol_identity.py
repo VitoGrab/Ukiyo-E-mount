@@ -47,12 +47,12 @@ class ProtocolIdentityTests(unittest.TestCase):
         self.assertEqual(data[-1], 0x55)
 
     def test_project_version_042_at_protocol_108(self) -> None:
-        self.assertEqual(self.identity["project_version"], "0.42")
+        self.assertEqual(self.identity["project_version"], "0.46")
         self.assertEqual(self.identity["lens_firmware_major_byte"], 0x04)
-        self.assertEqual(self.identity["lens_firmware_minor_byte"], 2)
+        self.assertEqual(self.identity["lens_firmware_minor_byte"], 6)
         self.assertEqual(self.identity["emount_protocol_u16"], 0x0108)
-        self.assert_packet(self.packets, protocol=0x0108, major=0x04, minor=2)
-        self.assertEqual(packet_bytes(self.packets, "em_msg_07")[-3:-1], [0xcd, 0x02])
+        self.assert_packet(self.packets, protocol=0x0108, major=0x04, minor=6)
+        self.assertEqual(packet_bytes(self.packets, "em_msg_07")[-3:-1], [0xd1, 0x02])
 
     def test_compact_project_version_encoding(self) -> None:
         self.assertEqual(parse_project_version("0.42"), (0x04, 2))
@@ -63,7 +63,7 @@ class ProtocolIdentityTests(unittest.TestCase):
     def test_generated_version_header(self) -> None:
         expected = render_version_header(self.identity)
         self.assertEqual(expected, VERSION_HEADER.read_text(encoding='utf-8'))
-        self.assertIn('h0.42', expected)
+        self.assertIn('v0.46', expected)
 
     def test_regeneration_matches_checked_in_files(self) -> None:
         result = apply_to_sources(self.header, self.packets, self.profile, self.identity)
