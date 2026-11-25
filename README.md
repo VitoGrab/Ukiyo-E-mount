@@ -79,7 +79,7 @@ The numbered list below retains the complete long-term acceptance criteria.
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
 - The current project version is `0.46`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.46` -> `pl[6]=0x04`, `pl[5]=0x06`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
-- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.002`.
+- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.006`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
@@ -118,7 +118,7 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 ### Technical design decisions
 
-### XIAO LED build modes
+#### XIAO LED build modes
 
 - `pio run -e seeed_xiao` builds the debug configuration (default).
 - `pio run -e seeed_xiao_production` builds the production configuration.

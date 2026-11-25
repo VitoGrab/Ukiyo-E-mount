@@ -57,10 +57,9 @@ uint32_t boot_setup_done_ms = 0;
 constexpr uint8_t kLedUserPin = LED_BUILTIN;
 constexpr uint8_t kLedRxPin = PIN_LED_RXL;
 constexpr uint8_t kLedTxPin = PIN_LED_TXL;
+#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
 constexpr uint32_t kLedActivityPulseMs = 50u;
 bool led_vcc_on = false;
-
-#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
 uint32_t led_last_rx_frames = 0;
 uint32_t led_last_tx_frames = 0;
 uint32_t led_rx_until_ms = 0;
@@ -81,8 +80,8 @@ void status_leds_init_internal() {
   pinMode(kLedUserPin, OUTPUT);
   led_release(kLedRxPin);
   led_release(kLedTxPin);
-  led_vcc_on = false;
 #if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+  led_vcc_on = false;
   led_last_rx_frames = em_frames_rx;
   led_last_tx_frames = em_frames_tx;
   led_rx_until_ms = 0;
@@ -97,8 +96,8 @@ void status_leds_all_off() {
   pinMode(kLedUserPin, OUTPUT);
   led_release(kLedRxPin);
   led_release(kLedTxPin);
-  led_vcc_on = false;
 #if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+  led_vcc_on = false;
   led_last_rx_frames = em_frames_rx;
   led_last_tx_frames = em_frames_tx;
   led_rx_until_ms = 0;
