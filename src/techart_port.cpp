@@ -185,6 +185,7 @@ void poll() {
     }
     if (mode == WakeWaitCsFall) {
       if (!ukiyo_body_cs_high()) {
+        em_trace_cs_edge(0); // BODY_CS fell while the normal EIC was paused.
         delayMicroseconds(200);
         ukiyo_gpio_lens_cs(0);
         ukiyo_wake_monitor_stop();
@@ -193,7 +194,8 @@ void poll() {
         mode = Running;
         ++wake_successes;
         handshake_reported = false;
-        log_mode("SHORT_WAKE_PIN_HANDSHAKE_DONE");
+        /* Avoid USB output before the first short-wake 0x0B/0x09.
+         * The next loop must service queued requests immediately. */
         return;
       }
       if ((uint32_t)(micros() - wake_rise_started_us) >
@@ -383,7 +385,8 @@ void trace() {
   Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
   Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
   Serial.println("PIN_MASK_BITS=BODY_CS:1 BODY_VD:2 BODY_TX_TO_XIAO_RX:4 XIAO_TX_TO_BODY_RX:8 LENS_CS:16");
-  Serial.println("PROTOCOL_TRACE_STREAM=NONBLOCKING_SNAPSHOT");
+  Serial.println("PROTOCOL_TRACE_STREAM=THROTTLED_LIVE_COPY");
+  // A trace read does not stop capture or change the camera state.
   trace_dump.count = n;
   trace_dump.index = 0;
   trace_dump.len = 0;
