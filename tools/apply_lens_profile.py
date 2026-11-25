@@ -133,7 +133,9 @@ def replace_array(text: str, symbol: str, modify) -> str:
     data[-3], data[-2] = checksum & 0xff, checksum >> 8
     rows = ['    ' + ', '.join(f'0x{x:02x}' for x in data[i:i+12]) + ','
             for i in range(0, len(data), 12)]
-    note = '\n    /* Generated from config/lens_profile.json by apply_lens_profile.py */\n'
+    source = ('config/lens_profile.json and config/protocol_identity.json'
+              if symbol == 'em_msg_07' else 'config/lens_profile.json')
+    note = '\n    /* Generated from ' + source + ' by apply_lens_profile.py */\n'
     return text[:match.start()] + match.group(1) + note + '\n'.join(rows) + '\n' + match.group(3) + text[match.end():]
 
 
