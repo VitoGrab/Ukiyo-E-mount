@@ -11,7 +11,7 @@ extern "C" {
 
 namespace ukiyoemount { namespace techart {
 namespace {
-enum Mode { Off, Armed, Running, Fault };
+enum Mode { Off, Armed, Running, Suspended, WakeWaitBodyTx, WakeWaitCsFall, Fault };
 Mode mode = Off;
 bool automatic_enabled = false;
 #if UKIYO_TECHART_VENDOR_PRESENT
@@ -22,6 +22,13 @@ uint32_t last_frames_rx = 0;
 uint32_t last_frames_tx = 0;
 uint8_t last_reported_id = 0;
 bool handshake_reported = false;
+uint32_t wake_rise_started_us = 0;
+uint32_t wake_started_ms = 0;
+uint32_t wake_successes = 0;
+uint32_t wake_retries = 0;
+uint32_t wake_supply_resets = 0;
+bool log_suspended_pending = false;
+const uint32_t kWakeHandshakeTimeoutUs = 2000000u;
 bool supply_event_known = false;
 bool last_supply_state = false;
 uint32_t completed_sessions = 0;
@@ -32,6 +39,22 @@ uint32_t boot_pins_ready_ms = 0;
 uint32_t boot_setup_done_ms = 0;
 
 #if UKIYO_TECHART_VENDOR_PRESENT
+/* After the 0x16 ACK, immediately release UART TX and signal LOW.
+ * Do not print or wait here: the camera is polling its lens RX line. */
+void on_shutdown_from_body() {
+  em_eic_pause();
+  em_uart_disable();
+  ukiyo_gpio_tx_low();
+  ukiyo_gpio_tx_output();
+  ukiyo_gpio_tx_unmux();
+  ukiyo_gpio_lens_cs(0);
+  em_suspend_begin();
+  ukiyo_wake_monitor_start();
+  mode = Suspended;
+  log_suspended_pending = true;
+  wake_rise_started_us = 0;
+}
+
 void arm_internal() {
   mode = Armed;
   automatic_enabled = true;
@@ -60,6 +83,7 @@ void boot_auto_arm(uint32_t setup_entry_ms, uint32_t pins_ready_ms) {
   boot_pins_ready_ms = pins_ready_ms;
 #if UKIYO_TECHART_VENDOR_PRESENT
   ukiyo_supply_init();
+  em_set_powerdown_handler(on_shutdown_from_body);
   arm_internal();
 #endif
 }
@@ -71,8 +95,9 @@ bool arm() {
   Serial.println("TECHART_PORT=UNAVAILABLE_RUN_tools/import_techart.py");
   return false;
 #else
-  if (mode == Running) {
-    Serial.println("TECHART_PORT=RUNNING_USE_x_TO_STOP");
+  if (mode == Running || mode == Suspended ||
+      mode == WakeWaitBodyTx || mode == WakeWaitCsFall) {
+    Serial.println("TECHART_PORT=SESSION_ACTIVE_OR_SUSPENDED_USE_x_TO_STOP");
     return false;
   }
   if (mode == Armed) {
@@ -108,6 +133,72 @@ void poll() {
     supply_event_known = true;
   }
   em_trace_pin_probe();
+  if (log_suspended_pending) {
+    log_suspended_pending = false;
+    log_mode("SUSPENDED_AFTER_0x16_TX_LOW");
+  }
+
+  /* Standby is an electrically signaled state, not a loss of VCC.
+   * The body may retain LOGIC_VCC even after switching the camera off. */
+  if (mode == Suspended || mode == WakeWaitBodyTx ||
+      mode == WakeWaitCsFall) {
+    if (!powered) {
+      ++wake_supply_resets;
+      ukiyo_bus_abort();
+      arm_internal();
+      log_mode("SUSPEND_POWER_LOSS_COLD_REARM");
+      return;
+    }
+    if (mode == Suspended && ukiyo_wake_monitor_triggered()) {
+      wake_rise_started_us = ukiyo_wake_monitor_rise_us();
+      wake_started_ms = millis();
+      mode = WakeWaitBodyTx;
+    }
+    if (mode == WakeWaitBodyTx) {
+      if (!ukiyo_body_cs_high() ||
+          (uint32_t)(micros() - wake_rise_started_us) >
+              kWakeHandshakeTimeoutUs) {
+        ++wake_retries;
+        ukiyo_wake_monitor_stop();
+        ukiyo_gpio_lens_cs(0);
+        ukiyo_wake_monitor_start();
+        mode = Suspended;
+        return;
+      }
+      /* Sony's short wake: BODY_CS high -> LENS_CS high ->
+       * body TX high -> lens TX high -> BODY_CS low -> LENS_CS low. */
+      if (ukiyo_body_tx_high()) {
+        em_uart_resume();                 // Retain the 1.5 Mbaud setting.
+        mode = WakeWaitCsFall;
+      }
+    }
+    if (mode == WakeWaitCsFall) {
+      if (!ukiyo_body_cs_high()) {
+        delayMicroseconds(200);
+        ukiyo_gpio_lens_cs(0);
+        ukiyo_wake_monitor_stop();
+        em_suspend_woke();
+        em_eic_resume();
+        mode = Running;
+        ++wake_successes;
+        handshake_reported = false;
+        log_mode("SHORT_WAKE_PIN_HANDSHAKE_DONE");
+        return;
+      }
+      if ((uint32_t)(micros() - wake_rise_started_us) >
+          kWakeHandshakeTimeoutUs) {
+        ++wake_retries;
+        em_uart_disable();
+        ukiyo_gpio_tx_low();
+        ukiyo_gpio_tx_output();
+        ukiyo_gpio_lens_cs(0);
+        ukiyo_wake_monitor_stop();
+        ukiyo_wake_monitor_start();
+        mode = Suspended;
+      }
+    }
+    return;
+  }
 
   if (mode == Fault) {
     // Retry only after a *confirmed* power-off, never while a failing body
@@ -155,6 +246,7 @@ void poll() {
     return;
   }
   em_poll();
+  if (mode != Running) return; // A 0x16 can transition to standby.
 
   // Keepalive 0x0A is deliberately silent; all counters remain in 's'.
   // Other IDs and the completed handshake are visible in the monitor.
@@ -186,6 +278,9 @@ void status() {
   switch (mode) {
     case Armed: Serial.println("ARMED"); break;
     case Running: Serial.println("RUNNING"); break;
+    case Suspended: Serial.println("SUSPENDED"); break;
+    case WakeWaitBodyTx: Serial.println("WAKE_WAIT_BODY_TX"); break;
+    case WakeWaitCsFall: Serial.println("WAKE_WAIT_CS_FALL"); break;
     case Fault: Serial.println("FAULT"); break;
     default: Serial.println("OFF"); break;
   }
@@ -248,6 +343,11 @@ void status() {
   Serial.print("INIT_STARTED_MS="); Serial.println(init_started_ms);
   Serial.print("INIT_DURATION_MS=");
   Serial.println(session_at_ms && init_started_ms ? (session_at_ms - init_started_ms) : 0);
+  Serial.print("WAKE_SUCCESS_COUNT="); Serial.println(wake_successes);
+  Serial.print("WAKE_RETRY_COUNT="); Serial.println(wake_retries);
+  Serial.print("WAKE_COLD_REINIT_COUNT="); Serial.println(wake_supply_resets);
+  Serial.print("WAKE_RISE_AT_US="); Serial.println(wake_rise_started_us);
+  Serial.print("WAKE_START_AT_MS="); Serial.println(wake_started_ms);
   Serial.print("SESSION_COUNT="); Serial.println(completed_sessions);
   Serial.print("FAILED_SESSIONS="); Serial.println(failed_sessions);
   Serial.println("OPTICS=COMPILE_TIME_LENS_PROFILE");
