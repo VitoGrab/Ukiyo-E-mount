@@ -1480,6 +1480,216 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 	}
 }
 
+/* Post-shutdown diagnostics. The first valid 0x16 becomes EVT=0 and the
+ * buffer captures the following activity rather than busy normal frames.
+ * No USB output or GPIO direction changes are performed here.
+ *
+ * BODY_CS raw edges are limited to 32 (16 pulses) per capture to preserve
+ * room for later retries and the eventual cold/short handshake.
+ * t_us is useful for CS pulse widths; like micros(), it wraps in ~71.6 min.
+ */
+static volatile struct em_trace_event g_trace_events[EM_TRACE_SIZE];
+static volatile uint16_t g_trace_head;
+static volatile uint16_t g_trace_count;
+static volatile uint16_t g_trace_cs_logged;
+static volatile uint16_t g_trace_cs_omitted;
+static volatile uint8_t g_trace_triggered;
+static volatile uint8_t g_trace_frozen;
+static volatile uint8_t g_trace_resume_seen;
+static uint32_t g_trace_last_pin_poll_ms;
+static uint32_t g_trace_last_idle_ms;
+static uint8_t g_trace_last_pins = 0xFFu;
+
+/* Pin-level mask (only reads, never writes):
+ * bit0 BODY_CS; bit1 BODY_VD; bit2 XIAO RX <- body TX;
+ * bit3 XIAO TX -> body RX; bit4 LENS_CS.
+ * A set bit means that the input read HIGH.
+ */
+static uint8_t em_trace_pin_mask(void)
+{
+    return (uint8_t)((em_pin_level(EM_PIN_BODY_CS) ? 1u : 0u)
+        | (em_pin_level(EM_PIN_BODY_VD) ? 2u : 0u)
+        | (em_pin_level(EM_PIN_RX) ? 4u : 0u)
+        | (em_pin_level(EM_PIN_TX) ? 8u : 0u)
+        | (em_pin_level(EM_PIN_LENS_CS) ? 16u : 0u));
+}
+
+static void em_trace_store(uint8_t kind, uint16_t length,
+                           const uint8_t *raw, uint16_t available)
+{
+    uint16_t i, idx;
+    uint8_t is_shutdown;
+    volatile struct em_trace_event *e;
+
+    /* Skip spam from 0x0A even with malformed candidates. Drop normal
+     * 0x03/0x04 frames only when valid; keep their corrupted counterparts. */
+    if (available > 5u &&
+        ( (raw[3] == EM_CLASS_INIT && raw[5] == 0x0Au)
+          || (kind == EM_TRACE_VALID && raw[3] == EM_CLASS_NORMAL
+              && (raw[5] == 0x03u || raw[5] == 0x04u)))) {
+        return;
+    }
+    is_shutdown = kind == EM_TRACE_VALID && available > 5u
+        && raw[3] == EM_CLASS_INIT && raw[5] == EM_ID_SHUTDOWN;
+
+    if (!g_trace_triggered) {
+        if (!is_shutdown) return;
+        /* Discard pre-shutdown traffic. It cannot bury the wake attempts. */
+        g_trace_head = 0;
+        g_trace_count = 0;
+        g_trace_cs_logged = g_trace_cs_omitted = 0;
+        g_trace_resume_seen = 0;
+        g_trace_triggered = 1;
+        g_trace_last_pins = 0xFFu;
+        g_trace_last_pin_poll_ms = g_trace_last_idle_ms = 0;
+    }
+    if (g_trace_frozen) return;
+
+    idx = g_trace_head;
+    e = &g_trace_events[idx];
+    e->t_us = micros();
+    e->t_ms = millis();
+    e->length = length;
+    e->kind = kind;
+    e->msg_class = available > 3u ? raw[3] : 0xFFu;
+    e->id = available > 5u ? raw[5] : 0xFFu;
+    e->sample_len = (uint8_t)(available < EM_TRACE_SAMPLE
+                              ? available : EM_TRACE_SAMPLE);
+    for (i = 0; i < e->sample_len; ++i) e->sample[i] = raw[i];
+
+    g_trace_head = (uint16_t)((idx + 1u) % EM_TRACE_SIZE);
+    if (g_trace_count < EM_TRACE_SIZE) ++g_trace_count;
+
+    if (kind == EM_TRACE_VALID && available > 5u
+        && raw[3] == EM_CLASS_INIT) {
+        if (raw[5] == EM_ID_SESSION || raw[5] == 0x0Bu)
+            g_trace_resume_seen = 1;
+        if (g_trace_resume_seen && raw[5] == EM_ID_READY)
+            g_trace_frozen = 1;
+    }
+    if (g_trace_count >= EM_TRACE_SIZE)
+        g_trace_frozen = 1;
+}
+
+static void em_trace_rx_sample(uint8_t kind, uint16_t length, uint16_t avail)
+{
+    uint8_t bytes[EM_TRACE_SAMPLE];
+    uint16_t i, n = avail < EM_TRACE_SAMPLE ? avail : EM_TRACE_SAMPLE;
+    for (i = 0; i < n; ++i) bytes[i] = em_uart_rx_at(i);
+    em_trace_store(kind, length, bytes, n);
+}
+
+/* Used from the existing BODY_CS interrupt; never install a second ISR. */
+void em_trace_cs_edge(int level)
+{
+    if (!g_trace_triggered || g_trace_frozen || g_trace_resume_seen)
+        return;
+    if (g_trace_cs_logged < 32u) {
+        ++g_trace_cs_logged;
+        em_trace_store(level ? EM_TRACE_CS_RISE : EM_TRACE_CS_FALL,
+                       em_trace_pin_mask(), 0, 0);
+    } else if (g_trace_cs_omitted < 0xFFFFu) {
+        ++g_trace_cs_omitted;
+    }
+}
+
+/* A coarse, passive check in the main loop; catches stable RX/TX/CS/VD
+ * transitions even when no valid UART frame or CS interrupt arrives.
+ * Cannot detect a short press or sub-20ms pulse in isolation.
+ */
+void em_trace_pin_probe(void)
+{
+    uint32_t now;
+    uint8_t mask, event_kind = 0;
+    if (!g_trace_triggered || g_trace_frozen || g_trace_resume_seen)
+        return;
+    now = millis();
+    if ((uint32_t)(now - g_trace_last_pin_poll_ms) < 20u) return;
+    g_trace_last_pin_poll_ms = now;
+    mask = em_trace_pin_mask();
+    /* Do not fill the 128 slots with ordinary frame-sync (VD) toggles. */
+    if (g_trace_last_pins == 0xFFu
+        || ((mask ^ g_trace_last_pins) & (uint8_t)~2u) != 0u) {
+        g_trace_last_pins = mask;
+        event_kind = EM_TRACE_PINS;
+    } else if ((uint32_t)(now - g_trace_last_idle_ms) >= 2000u) {
+        event_kind = EM_TRACE_IDLE;
+    }
+    if (event_kind) {
+        g_trace_last_idle_ms = now;
+        __disable_irq();
+        em_trace_store(event_kind, mask, 0, 0);
+        __enable_irq();
+    }
+}
+
+uint16_t em_trace_count(void)
+{
+    uint16_t n;
+    __disable_irq(); n = g_trace_count; __enable_irq();
+    return n;
+}
+
+uint8_t em_trace_frozen(void) { return g_trace_frozen; }
+uint8_t em_trace_triggered(void) { return g_trace_triggered; }
+uint16_t em_trace_cs_omitted(void)
+{
+    uint16_t n;
+    __disable_irq(); n = g_trace_cs_omitted; __enable_irq();
+    return n;
+}
+
+uint8_t em_trace_get(uint16_t index, struct em_trace_event *out)
+{
+    uint16_t n, pos, i;
+    if (!out) return 0u;
+    __disable_irq();
+    n = g_trace_count;
+    if (index >= n) { __enable_irq(); return 0u; }
+    pos = (uint16_t)((g_trace_head + EM_TRACE_SIZE - n + index) % EM_TRACE_SIZE);
+    out->t_ms = g_trace_events[pos].t_ms;
+    out->t_us = g_trace_events[pos].t_us;
+    out->length = g_trace_events[pos].length;
+    out->kind = g_trace_events[pos].kind;
+    out->msg_class = g_trace_events[pos].msg_class;
+    out->id = g_trace_events[pos].id;
+    out->sample_len = g_trace_events[pos].sample_len;
+    for (i = 0; i < EM_TRACE_SAMPLE; ++i)
+        out->sample[i] = g_trace_events[pos].sample[i];
+    __enable_irq();
+    return 1u;
+}
+
+void em_trace_clear(void)
+{
+    __disable_irq();
+    g_trace_head = g_trace_count = 0u;
+    g_trace_cs_logged = g_trace_cs_omitted = 0u;
+    g_trace_triggered = g_trace_frozen = g_trace_resume_seen = 0u;
+    g_trace_last_pin_poll_ms = g_trace_last_idle_ms = 0u;
+    g_trace_last_pins = 0xFFu;
+    __enable_irq();
+}
+
+void em_trace_supply(uint8_t power_good, uint16_t adc10)
+{
+    if (!g_trace_triggered || g_trace_frozen) return;
+    __disable_irq();
+    em_trace_store(power_good ? EM_TRACE_SUPPLY_ON : EM_TRACE_SUPPLY_OFF,
+                   adc10, 0, 0u);
+    __enable_irq();
+}
+
+/* Serial command marker: the MCU cannot directly observe a shutter press
+ * if the body keeps every exposed bus line idle. */
+void em_trace_user_mark(void)
+{
+    if (!g_trace_triggered || g_trace_frozen) return;
+    __disable_irq();
+    em_trace_store(EM_TRACE_USER_MARK, 0, 0, 0u);
+    __enable_irq();
+}
+
 /* THE FRAMER.  The receive ring holds bytes, not windows: a frame is wherever
  * an 0xF0 starts a run whose length field, 0x55 terminator and checksum all
  * agree.  This replaces "rising edge clears the buffer, falling edge parses
@@ -1520,6 +1730,7 @@ static uint16_t em_rx_drain(void)
 	avail = em_uart_rx_count();
 	while (avail) {
 		uint16_t len, k, sum;
+        uint8_t bad_kind = EM_TRACE_BAD_FRAME;
 
 		if (em_uart_rx_at(0) != EM_FRAME_START) {
 			em_uart_rx_consume(1);
@@ -1544,6 +1755,7 @@ static uint16_t em_rx_drain(void)
 				continue;
 			}
 			if (avail < 3u) {
+                em_trace_rx_sample(EM_TRACE_TRUNCATED, avail, avail);
 				em_uart_rx_consume(avail);
 				break;
 			}
@@ -1557,11 +1769,13 @@ static uint16_t em_rx_drain(void)
 		}
 		if (em_uart_rx_at(len - 3u) != (uint8_t)sum
 		    || em_uart_rx_at(len - 2u) != (uint8_t)(sum >> 8)) {
+            bad_kind = EM_TRACE_BAD_CHECKSUM;
 			goto not_a_frame;
 		}
 		for (k = 0; k < len; k++) {
 			g_frame[k] = em_uart_rx_at(k);
 		}
+        em_trace_store(EM_TRACE_VALID, len, g_frame, len);
 		em_uart_rx_consume(len);
 		avail = (uint16_t)(avail - len);
 		em_frame_in(g_frame, len);
@@ -1569,6 +1783,7 @@ static uint16_t em_rx_drain(void)
 		continue;
 
 not_a_frame:
+        em_trace_rx_sample(bad_kind, len, avail);
 		if (em_bad_frames != 0xFFu) {
 			em_bad_frames++;
 		}
@@ -1582,6 +1797,7 @@ not_a_frame:
  * runs the framer; the rise needs nothing -- the DMA is already receiving. */
 static void on_cs_edge(int level)
 {
+    em_trace_cs_edge(level);
 	em_cs_edges++;
 	if (!level) {
 		(void)em_rx_drain();

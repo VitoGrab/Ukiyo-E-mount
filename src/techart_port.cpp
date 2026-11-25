@@ -22,6 +22,8 @@ uint32_t last_frames_rx = 0;
 uint32_t last_frames_tx = 0;
 uint8_t last_reported_id = 0;
 bool handshake_reported = false;
+bool supply_event_known = false;
+bool last_supply_state = false;
 uint32_t completed_sessions = 0;
 uint32_t failed_sessions = 0;
 #endif
@@ -100,6 +102,12 @@ void poll() {
 #if UKIYO_TECHART_VENDOR_PRESENT
   if (mode == Off) return;
   const bool powered = ukiyo_supply_ok();
+  if (!supply_event_known || powered != last_supply_state) {
+    em_trace_supply(powered ? 1u : 0u, ukiyo_supply_adc());
+    last_supply_state = powered;
+    supply_event_known = true;
+  }
+  em_trace_pin_probe();
 
   if (mode == Fault) {
     // Retry only after a *confirmed* power-off, never while a failing body
@@ -207,6 +215,18 @@ void status() {
   Serial.print("VD_EDGES="); Serial.println(em_vd_edges);
   Serial.print("HANDSHAKE_DONE="); Serial.println(em_handshake_done);
   Serial.print("LAST_ID=0x"); Serial.println(em_last_id, HEX);
+  Serial.print("SHUTDOWN_ACKED="); Serial.println(em_shutdown_acked);
+  Serial.print("SHUTDOWN_PL0=0x"); Serial.println(em_m16_pl0, HEX);
+  Serial.print("SHUTDOWN_AT_MS="); Serial.println(em_t_shutdown);
+  Serial.print("IGNORED_AFTER_SHUTDOWN="); Serial.println(em_ignored_after_shutdown);
+  Serial.print("SLEEP_COUNT="); Serial.println(em_sleep_n);
+  Serial.print("WAKE_COUNT="); Serial.println(em_wake_n);
+  Serial.print("WAKE_FIRST_ID=0x"); Serial.println(em_wake_first_id, HEX);
+  Serial.print("WAKE_AT_MS="); Serial.println(em_t_wake);
+  Serial.print("PROTOCOL_TRACE_COUNT="); Serial.println(em_trace_count());
+  Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
+  Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
+  Serial.print("PROTOCOL_TRACE_FROZEN="); Serial.println(em_trace_frozen());
   Serial.print("BAD_FRAMES="); Serial.println(em_bad_frames);
   Serial.print("RX_SKIPPED_BYTES="); Serial.println(em_rx_skipped);
   Serial.print("REQUEST_DROPPED="); Serial.println(em_req_dropped);
@@ -241,6 +261,41 @@ void status() {
 
 void trace() {
 #if UKIYO_TECHART_VENDOR_PRESENT
+  // Printing many events at 115200 baud can disrupt active bus timing.
+  if (mode == Running && !em_shutdown_acked) {
+    Serial.println("PROTOCOL_TRACE_DEFERRED_ACTIVE_SESSION");
+    Serial.println("ACTION=CAPTURE_THEN_INSPECT_AFTER_0x16_OR_DISCONNECT");
+    return;
+  }
+  const uint16_t events = em_trace_count();
+  Serial.print("PROTOCOL_TRACE_COUNT="); Serial.println(events);
+  Serial.print("PROTOCOL_TRACE_FROZEN="); Serial.println(em_trace_frozen());
+  Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
+  Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
+  Serial.println("PIN_MASK_BITS=BODY_CS:1 BODY_VD:2 BODY_TX_TO_XIAO_RX:4 XIAO_TX_TO_BODY_RX:8 LENS_CS:16");
+  for (uint16_t i = 0; i < events; ++i) {
+    struct em_trace_event e;
+    if (!em_trace_get(i, &e)) break;
+    Serial.print("EVT="); Serial.print(i);
+    Serial.print(" T_MS="); Serial.print(e.t_ms);
+    Serial.print(" T_US="); Serial.print(e.t_us);
+    Serial.print(" KIND="); Serial.print(e.kind);
+    if (e.kind >= EM_TRACE_CS_RISE && e.kind <= EM_TRACE_IDLE) {
+      Serial.print(" PINS=0x"); Serial.print(e.length, HEX);
+    } else {
+      Serial.print(" LEN_OR_ADC="); Serial.print(e.length);
+      Serial.print(" CLASS=0x"); Serial.print(e.msg_class, HEX);
+      Serial.print(" ID=0x"); Serial.print(e.id, HEX);
+    }
+    Serial.print(" HEAD=");
+    for (uint8_t k = 0; k < e.sample_len; ++k) {
+      if (e.sample[k] < 16u) Serial.print('0');
+      Serial.print(e.sample[k], HEX);
+      if (k + 1u < e.sample_len) Serial.print(' ');
+    }
+    Serial.println();
+  }
+
   const uint8_t n = ukiyo_trace_count();
   Serial.print("TECHART_CS_TRACE_COUNT="); Serial.println(n);
   for (uint8_t i = 0; i < n; ++i) {
@@ -250,6 +305,30 @@ void trace() {
   }
 #else
   Serial.println("TECHART_TRACE=UNAVAILABLE_NO_VENDOR");
+#endif
+}
+void mark_trace() {
+#if UKIYO_TECHART_VENDOR_PRESENT
+  if (!em_trace_triggered()) {
+    Serial.println("PROTOCOL_TRACE_NOT_TRIGGERED_WAIT_FOR_0x16");
+    return;
+  }
+  if (em_trace_frozen()) {
+    Serial.println("PROTOCOL_TRACE_FROZEN_USE_tr");
+    return;
+  }
+  em_trace_user_mark();
+  Serial.println("PROTOCOL_TRACE_USER_MARK_ADDED");
+#else
+  Serial.println("PROTOCOL_TRACE_UNAVAILABLE");
+#endif
+}
+void clear_trace() {
+#if UKIYO_TECHART_VENDOR_PRESENT
+  em_trace_clear();
+  Serial.println("PROTOCOL_TRACE_CLEARED");
+#else
+  Serial.println("PROTOCOL_TRACE_UNAVAILABLE");
 #endif
 }
 } }
