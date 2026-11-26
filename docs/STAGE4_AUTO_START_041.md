@@ -1,5 +1,7 @@
 # v0.4.1 — Always-ready Techart port and startup diagnostics
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 ## Verified baseline
 
 On Sony A6000, v0.4.0 completed the bidirectional 750 kb/s -> 1.5 Mb/s handshake, maintained repeated 0x0A traffic, and wrote the lens identity to JPG/ARW. The HELIOS 44M-4 profile reports Sony Lens ID 0, focal length 58 mm and range f/2–f/16. Camera-selected f/5.6 was recorded as `ExifIFD:FNumber=5.6`, while `MaxApertureValue=2.0` and `LensModel=HELIOS 44M-4 58mm f2` remained correct.

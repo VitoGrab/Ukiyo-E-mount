@@ -1,5 +1,7 @@
 # Stage 3.1 — Timestamped camera-CS handshake diagnostic
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 ## Status
 
 **Host-validated source; XIAO firmware compilation and physical A6000 measurements pending.**

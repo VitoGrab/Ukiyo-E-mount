@@ -1,5 +1,7 @@
 # Eidolon v0.1.0 — Sony E-mount protocol workbench
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 An initial, **bench-only** PlatformIO prototype for Seeed XIAO SAMD21.
 The current firmware DOES NOT implement a live E-mount lens and MUST NOT be
 connected to a camera. It does not transmit Techart replies on E-mount pins.

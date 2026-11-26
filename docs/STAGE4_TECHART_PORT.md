@@ -1,5 +1,7 @@
 # v0.4.0 — Techart EA9 protocol-core port to XIAO SAMD21
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 ## Status
 
 **Experimental integration package, not a camera-validated release.** The original Techart `emount.c` and `emount_packets.c` are imported from the MIT-licensed project, not replaced with another hand-written state machine. The importer rejects unexpected GPIO code changes. The port has not been built on the target PlatformIO toolchain or tested against the actual Sony A6000 at the time of packaging.

@@ -1,5 +1,7 @@
 # Stage 2 — Offline protocol-session workbench
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 Status: **development preview v0.2.0**. No camera connection or E-mount electrical
 interface is implemented. This does **not** complete the repository's Stage 2
 hardware / bus-validation exit criterion.

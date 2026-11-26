@@ -1,5 +1,7 @@
 # Stage 3.0 — Camera physical-link diagnostic (v0.3.0)
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 ## Scope and release status
 
 **PREVIEW / HOST TESTED / NOT TESTED ON A PHYSICAL CAMERA.**

@@ -1,5 +1,7 @@
 # Stage 2.1 — XIAO physical-pin workbench (v0.2.1)
 
+> Historical development record. Commands, paths and status labels below describe the original stage, not the current v0.47 firmware. See the README for the current workflow.
+
 **Status:** Bench-only development preview. **Never attach a camera, Meike ring,
 Sony lens, or external power while executing a `bench` command.** USB-C supplies
 all power. The 5V and 3V3 header pads MUST NOT be jumpered to GPIO.

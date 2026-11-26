@@ -101,7 +101,7 @@ Powerbank testing was performed before Stage 4.7. Standby validation remains lim
 
 **Stage 4.7 — codebase refactor and startup-path optimization**
 
-- Following the powerbank tests, consolidate mode/state handling, remove obsolete bench modes and misleading version banners, and replace project-owned Techart-specific names while retaining upstream license, copyright and provenance notices.
+- Following the powerbank tests, consolidate mode/state handling, remove obsolete bench modes and misleading version banners, and use project-owned protocol names while retaining upstream license, copyright and provenance notices.
 - Separate electrical drivers, frame parsing, request dispatch, session lifecycle, optical profiles and diagnostics; retain replay/regression tests for a6000 init, status, shutdown and wake traces.
 - Prioritize the cold-start path: establish safe pin states and protocol receive readiness as early as possible; avoid USB CDC initialization, diagnostics, delays, unnecessary setup and nonessential subsystem initialization before the first valid body request.
 - Explicitly preserve fast reception and handling of cold-init 0x01 and short-wake 0x0B. The generated version header is compile-time-only and must not add runtime startup work.
@@ -147,8 +147,7 @@ Debug mode: User LED is solid while LOGIC_VCC is detected; RX gives a short puls
   printing in time-critical E-mount processing.
 - Use `Serial1` hardware UART at D6/D7; 750 kbaud already passed loopback.
 - Keep E-mount protocol processing independent of hardware GPIO/UART backends.
-- Integrate Techart packet tables and session processing carefully rather than
-  flashing the EA9 firmware image or directly copying its peripheral setup.
+- Maintain the integrated E-mount protocol engine independently, retaining upstream attribution.
 - a6000 handshake has nine init exchanges: 01, 07, 0C, 0B, 08, 09, 0D,
   10, 0A. Some other bodies require additional messages.
 - Treat 0x0C as a real baud-rate transition. Do not acknowledge a speed change
@@ -191,3 +190,7 @@ testing or third-party license and attribution requirements.
 ### References for E-mount PCB
 - Mechanical PCB photo reference:
   https://www.pdmovie.com/products/smartfusion
+
+### License and provenance
+
+Ukiyo-E-mount firmware is distributed under the [MIT License](LICENSE). The integrated protocol engine contains code derived from Aylwin Wei's MIT-licensed Techart EA9 community firmware. See [upstream provenance](third_party/Techart-UPSTREAM.txt) and [original license](third_party/Techart-LICENSE). The engine is maintained in `src/emount/` and `include/emount/`; the legacy importer has been retired.
