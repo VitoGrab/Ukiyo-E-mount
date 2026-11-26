@@ -107,6 +107,10 @@ Powerbank testing was performed before Stage 4.7. Standby validation remains lim
 - Explicitly preserve fast reception and handling of cold-init 0x01 and short-wake 0x0B. The generated version header is compile-time-only and must not add runtime startup work.
 - Re-run the complete powerbank test after each startup-path change. Do not remove a bench facility until its regression coverage has been retained elsewhere.
 
+### Future stage — independently programmable lens profiles
+
+Reserve an erase-row-aligned region at the end of application Flash for a versioned lens-profile image. Keep firmware identity and protocol/session logic in the application; store lens-specific descriptors and static response data separately, with runtime fields patched in RAM. Define a stable binary schema with length, compatibility version and CRC. Validate the profile before use and retain a safe fallback for missing or invalid data. Provide independent profile generation and programming tools; verify linker boundaries, bootloader/EEPROM reservations, and that firmware uploads preserve the profile (and vice versa). Test interrupted writes and startup latency. Exact partition size and address are TBD after inspecting the actual linker map and upload erase behavior.
+
 **Stage 4.8 — additional body compatibility**
 
 - Test a6500 after refactoring, retaining a6000 as the regression baseline.
