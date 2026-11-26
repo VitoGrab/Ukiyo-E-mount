@@ -70,55 +70,13 @@
 	(t) == 12 ? 0x40 : (t) == 13 ? 0x45 : (t) == 14 ? 0x50 : (t) == 15 ? 0x56 : \
 	(t) == 16 ? 0x63 : (t) == 17 ? 0x71 : (t) == 18 ? 0x80 : 0x90))
 
-/* Ukiyo-E-mount MF test selector (compile-time, no protocol changes outside
- * the four descriptor groups below). Change ONLY this number and rebuild.
- *
- * 0 = reference: identical packet bytes to the attached source
- * 1 = single flag: 0x05 pl[95] = 0
- * 2 = MF core: #1 + 0x05 pl[9..16] = 0 (recommended first)
- * 3 = MF descriptor: #2 + manual-looking 0x08 fields
- * 4 = MF capabilities: #2 + hide 0x34/0x3C in 0x01 bitmap
- * 5 = combined: #3 + #4
- *
- * These are hypotheses for camera testing, NOT validated AF/MF behavior.
- * The native class (0x07 pl[0] = 0x01), the 0x35 response and all packet
- * handlers remain intact in every profile. Do not run apply_lens_profile.py
- * after selecting a profile without reviewing its generated file diff.
- */
-#define UKIYO_MF_TEST_PROFILE 0
-
-#if (UKIYO_MF_TEST_PROFILE < 0) || (UKIYO_MF_TEST_PROFILE > 5)
-#error "UKIYO_MF_TEST_PROFILE must be an integer from 0 to 5"
-#endif
-
-#if UKIYO_MF_TEST_PROFILE == 2 || UKIYO_MF_TEST_PROFILE == 3 || \
-    UKIYO_MF_TEST_PROFILE == 4 || UKIYO_MF_TEST_PROFILE == 5
-/* 0x05 pl[9..16]: AF drive ranges. */
-#define UKIYO_MF_05_FOCUS_RANGES 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-#else
+/* Baseline packet values; native MF overrides are applied by emount.c. */
 #define UKIYO_MF_05_FOCUS_RANGES 0x2a, 0x00, 0x2a, 0x00, 0x54, 0x01, 0x54, 0x01
-#endif
-
-#if UKIYO_MF_TEST_PROFILE == 3 || UKIYO_MF_TEST_PROFILE == 5
-/* 0x08 pl[6], pl[7], pl[9], pl[85]: Lex Optical-like descriptor values. */
-#define UKIYO_MF_08_PL7  0x00
-#define UKIYO_MF_08_PL9  0x01
-#define UKIYO_MF_08_PL85 0x00
-#else
 #define UKIYO_MF_08_PL7  0x80
 #define UKIYO_MF_08_PL9  0x14
 #define UKIYO_MF_08_PL85 0x80
-#endif
-
-#if UKIYO_MF_TEST_PROFILE == 4 || UKIYO_MF_TEST_PROFILE == 5
-/* 0x01 bitmap: hide 0x34 (pl[6] bit 3) and 0x3C (pl[7] bit 3).
- * Keep 0x35 (pl[6] bit 4) advertised and its handler unchanged. */
-#define UKIYO_MF_01_PL6 0x10
-#define UKIYO_MF_01_PL7 0x56
-#else
 #define UKIYO_MF_01_PL6 0x18
 #define UKIYO_MF_01_PL7 0x5e
-#endif
 
 /* The stock mask plus bits 33 and 45, the 0x04 query records 0x22 and 0x2E
  * (pl[4] 80 -> 82, pl[5] 07 -> 27), as Sony natives and Yongnuo assert; and
@@ -156,11 +114,7 @@ uint8_t em_msg_01[EA9_LEN_01] = {
  * 0x02 (f/22.6) on the SEL5518Z and both Yongnuo lenses -- and only manual
  * lenses and adapters send 0, "none".  0x11, as the SELP1650, SEL55210 and
  * SEL2870 send it; the stock sent 0. */
-#if UKIYO_MF_TEST_PROFILE == 0
 #define EM05_PL95 0x11u
-#else
-#define EM05_PL95 0x00u
-#endif
 
 uint8_t em_msg_05[EA9_LEN_05] = {
 	/* +0x00 */ 0xf0, 0x69, 0x00, 0x01, 0x64, 0x05, EM_LO(EM_APERTURE_NOW), EM_HI(EM_APERTURE_NOW),

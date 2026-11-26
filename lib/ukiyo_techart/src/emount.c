@@ -48,27 +48,8 @@
 #include "em_eic.h"
 #include "optical_file.h"
 
-/* Experimental native-manual-focus profiles for Sony E-mount.
- * Change one number, rebuild, and power-cycle both the camera and XIAO.
- * 0: original behaviour, exactly as before this patch
- * 1: Voigtlander NEX-7 0x06 idle core (captured)
- * 2: Lex Optical 0x06 idle core (its norm06[])
- * 3: profile 1 + manual/native 0x05 focus data
- * 4: profile 3 + Lex-based 0x01 / 0x08 manual init characteristics
- * 5: profile 4 with Lex 0x06 instead of the Voigtlander core
- * This is a research switch, not a confirmed autofocus-capability flag.
- */
-#define UKIYO_MF_SCENARIO 3
-#if UKIYO_MF_SCENARIO < 0 || UKIYO_MF_SCENARIO > 5
-#error "UKIYO_MF_SCENARIO must be 0..5"
-#endif
-
-#if UKIYO_MF_SCENARIO != 0
-/* Values are 39-byte 0x06 payloads, not whole frames.  The transport still
- * supplies sequence numbers and recalculates the checksum.  No tail/event
- * bytes are overwritten.  The Voigtlander core is the idle 0x06 observed
- * with the 15 mm f/4.5 E-mount lens on a NEX-7, held static for this test.
- * Lex's core is copied from LexOptical/E-Mount Constants.h norm06[]. */
+/* Validated native manual-focus idle payload, based on the captured
+ * Voigtlander 15 mm f/4.5 E-mount lens on NEX-7. */
 static const uint8_t ukiyo_voigt_06[39] = {
     0x08, 0x00, 0x3f, 0x10, 0x00, 0x00, 0x00, 0x00,
     0x10, 0x3f, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -76,20 +57,11 @@ static const uint8_t ukiyo_voigt_06[39] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
-static const uint8_t ukiyo_lex_06[39] = {
-    0x10, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
-    0x10, 0x3f, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
-#endif
 
 /* Init-time changes: applied AFTER put_focal() and BEFORE replying to 0x01.
  * Never reapply per frame: the main loop owns aperture and optical rows. */
 static void ukiyo_mf_init_profile(void)
 {
-#if UKIYO_MF_SCENARIO >= 3
     uint8_t i;
     /* Manual lenses have no AF motor position limits/rates in 0x05.
      * Leave focal length, aperture values and optical-correction rows alone. */
@@ -100,34 +72,6 @@ static void ukiyo_mf_init_profile(void)
     /* The Voigtlander trace carries switch value 03 at rest (meaning is
      * not fully documented), whereas the Techart template sends 01. */
     em_msg_05[6u + 62u] = 0x03u;
-#endif
-#if UKIYO_MF_SCENARIO >= 4
-    {
-        /* Lex Optical capability declaration, preserving our existing
-         * handlers for 0x35, 0x3D and 0x3F (modern body + Helios EXIF).
-         * This is deliberately NOT a byte-identical Lex replay. */
-        static const uint8_t lex_cap[8] = {
-            0xff, 0x97, 0x78, 0x15, 0x80, 0x40, 0x10, 0x00
-        };
-        uint8_t i;
-        for (i = 0; i < 8u; ++i) em_msg_01[6u + i] = lex_cap[i];
-        em_msg_01[6u + 1u] |= 0x08u; /* 0x0C: keep 1.5 Mbaud negotiation */
-        em_msg_01[6u + 6u] |= 0x10u; /* 0x35 */
-        em_msg_01[6u + 7u] |= 0x50u; /* 0x3D and 0x3F */
-
-        /* Lex 0x08 manual-focus descriptors. Do not copy its 15 mm nameplate,
-         * aperture range or serial number: these remain Helios-specific. */
-        em_msg_08[6u + 5u]  = 0x40u;
-        em_msg_08[6u + 6u]  = 0x00u;
-        em_msg_08[6u + 7u]  = 0x00u;
-        em_msg_08[6u + 9u]  = 0x01u;
-        em_msg_08[6u + 10u] = 0x00u;
-        em_msg_08[6u + 12u] = 0x02u;
-        em_msg_08[6u + 14u] = 0x00u;
-        em_msg_08[6u + 23u] = 0x15u;
-        em_msg_08[6u + 85u] = 0x00u;
-    }
-#endif
 }
 
 /* Called after status06_focus() overwrites the 0x06 template, immediately
@@ -135,15 +79,9 @@ static void ukiyo_mf_init_profile(void)
  * tail at pl[39+] and thus does not suppress new A6000 commands. */
 static void ukiyo_mf_override_status06(void)
 {
-#if UKIYO_MF_SCENARIO != 0
     uint8_t i;
-#if UKIYO_MF_SCENARIO == 2 || UKIYO_MF_SCENARIO == 5
-    const uint8_t *pl = ukiyo_lex_06;
-#else
     const uint8_t *pl = ukiyo_voigt_06;
-#endif
     for (i = 0; i < 39u; ++i) em_msg_06[6u + i] = pl[i];
-#endif
 }
 
 
