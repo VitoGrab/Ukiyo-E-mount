@@ -125,7 +125,7 @@ The workspace tasks include separate debug and production builds/uploads, lens-p
 - `Ukiyo: Apply Lens Profile` runs `tools/apply_lens_profile.py`.
 - `Ukiyo: Verify Lens Profile` runs the same tool with `--verify-only`.
 - `Ukiyo: Upload` and `Ukiyo: Upload Production` use `tools/upload_with_retry.py`: build once, then retry the SAM-BA upload up to three times.
-- The PlatformIO post extra-script extends bootloader-port discovery from the upstream five-second wait to fifteen seconds. It does not alter the 1200-baud reset touch or BOSSA transfer parameters.
+- The PlatformIO post extra-script extends bootloader-port discovery to a fifteen-second maximum, with a three-second fallback when the original port remains present and no re-enumeration is observed. It does not alter the 1200-baud reset touch or BOSSA transfer parameters.
 - If automatic reset still fails, use the XIAO's documented double-reset procedure to enter its bootloader, then retry the upload task.
 
 #### XIAO LED build modes
