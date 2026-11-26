@@ -11,7 +11,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from apply_lens_profile import (  # noqa: E402
-    CONFIG, IDENTITY, VENDOR, VERSION_HEADER, ProfileError, apply_to_sources,
+    CONFIG, IDENTITY, ENGINE_HEADERS, ENGINE_SOURCES, VERSION_HEADER, ProfileError, apply_to_sources,
     load_identity, load_profile, parse_project_version, render_version_header,
 )
 
@@ -32,8 +32,8 @@ class ProtocolIdentityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.profile = load_profile(CONFIG)
         self.identity = load_identity(IDENTITY)
-        self.header = (VENDOR / "emount.h").read_text(encoding="utf-8")
-        self.packets = (VENDOR / "emount_packets.c").read_text(encoding="utf-8")
+        self.header = (ENGINE_HEADERS / "emount.h").read_text(encoding="utf-8")
+        self.packets = (ENGINE_SOURCES / "emount_packets.c").read_text(encoding="utf-8")
 
     def assert_packet(self, source: str, *, protocol: int, major: int, minor: int) -> None:
         data = packet_bytes(source, "em_msg_07")

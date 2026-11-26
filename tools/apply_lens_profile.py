@@ -16,7 +16,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = ROOT / 'config' / 'lens_profile.json'
 IDENTITY = ROOT / 'config' / 'protocol_identity.json'
-VENDOR = ROOT / 'lib' / 'ukiyo_techart' / 'src'
+ENGINE_HEADERS = ROOT / 'include' / 'emount'
+ENGINE_SOURCES = ROOT / 'src' / 'emount'
 VERSION_HEADER = ROOT / 'include' / 'ukiyo-e-mount' / 'version.h'
 
 
@@ -205,8 +206,8 @@ def main() -> int:
     try:
         p = load_profile(args.config)
         identity = load_identity(args.identity)
-        hdr_file = VENDOR / 'emount.h'
-        packets_file = VENDOR / 'emount_packets.c'
+        hdr_file = ENGINE_HEADERS / 'emount.h'
+        packets_file = ENGINE_SOURCES / 'emount_packets.c'
         original_hdr = hdr_file.read_text(encoding='utf-8')
         original_packets = packets_file.read_text(encoding='utf-8')
         original_version_header = VERSION_HEADER.read_text(encoding='utf-8') if VERSION_HEADER.exists() else ''
