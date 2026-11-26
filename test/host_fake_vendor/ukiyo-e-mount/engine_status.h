@@ -1,0 +1,2 @@
+#pragma once
+#define UKIYO_PROTOCOL_ENGINE_PRESENT 1

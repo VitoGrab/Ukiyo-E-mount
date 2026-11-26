@@ -1,9 +1,9 @@
 #include <Arduino.h>
 #include <stdio.h>
-#include "ukiyo-e-mount/techart_port.h"
-#include "ukiyo-e-mount/vendor_status.h"
+#include "ukiyo-e-mount/emulator.h"
+#include "ukiyo-e-mount/engine_status.h"
 #include "ukiyo-e-mount/version.h"
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
 extern "C" {
 #include "emount.h"
 #include "em_uart.h"
@@ -12,12 +12,12 @@ extern "C" {
 }
 #endif
 
-namespace ukiyoemount { namespace techart {
+namespace ukiyoemount { namespace emulator {
 namespace {
 enum Mode { Off, Armed, Running, Suspended, WakeWaitBodyTx, WakeWaitCsFall, Fault };
 Mode mode = Off;
 bool automatic_enabled = false;
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
 uint32_t armed_at_ms = 0;
 uint32_t session_at_ms = 0;
 uint32_t init_started_ms = 0;
@@ -57,7 +57,7 @@ uint32_t boot_setup_done_ms = 0;
 constexpr uint8_t kLedUserPin = LED_BUILTIN;
 constexpr uint8_t kLedRxPin = PIN_LED_RXL;
 constexpr uint8_t kLedTxPin = PIN_LED_TXL;
-#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_DEBUG_LEDS && UKIYO_PROTOCOL_ENGINE_PRESENT
 constexpr uint32_t kLedHandshakePulseMs = 100u;
 constexpr uint32_t kLedErrorPulseMs = 300u;
 bool led_vcc_on = false;
@@ -79,7 +79,7 @@ void led_release(uint8_t pin) {
   digitalWrite(pin, LOW);  // INPUT + LOW disables the internal pull-up.
 }
 
-#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_DEBUG_LEDS && UKIYO_PROTOCOL_ENGINE_PRESENT
 void led_snapshot_diagnostics() {
   led_last_bad_frames = em_bad_frames;
   led_last_req_dropped = em_req_dropped;
@@ -118,7 +118,7 @@ void status_leds_init_internal() {
   pinMode(kLedUserPin, OUTPUT);
   led_release(kLedRxPin);
   led_release(kLedTxPin);
-#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_DEBUG_LEDS && UKIYO_PROTOCOL_ENGINE_PRESENT
   led_vcc_on = false;
   led_last_handshake = em_handshake_done != 0;
   led_rx_until_ms = 0;
@@ -134,7 +134,7 @@ void status_leds_all_off() {
   pinMode(kLedUserPin, OUTPUT);
   led_release(kLedRxPin);
   led_release(kLedTxPin);
-#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_DEBUG_LEDS && UKIYO_PROTOCOL_ENGINE_PRESENT
   led_vcc_on = false;
   led_last_handshake = em_handshake_done != 0;
   led_rx_until_ms = 0;
@@ -145,7 +145,7 @@ void status_leds_all_off() {
 #endif
 }
 
-#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_DEBUG_LEDS && UKIYO_PROTOCOL_ENGINE_PRESENT
 void status_leds_update(bool vcc_detected) {
   if (led_vcc_on != vcc_detected) {
     digitalWrite(kLedUserPin, vcc_detected ? LOW : HIGH);
@@ -176,7 +176,7 @@ void status_leds_update(bool vcc_detected) {
 #endif
 
 
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
 /* After the 0x16 ACK, immediately release UART TX and signal LOW.
  * Do not print or wait here: the camera is polling its lens RX line. */
 void on_shutdown_from_body() {
@@ -221,7 +221,7 @@ void status_leds_init() { status_leds_init_internal(); }
 void boot_auto_arm(uint32_t setup_entry_ms, uint32_t pins_ready_ms) {
   boot_setup_entry_ms = setup_entry_ms;
   boot_pins_ready_ms = pins_ready_ms;
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   ukiyo_supply_init();
   em_set_powerdown_handler(on_shutdown_from_body);
   arm_internal();
@@ -231,7 +231,7 @@ void boot_auto_arm(uint32_t setup_entry_ms, uint32_t pins_ready_ms) {
 void record_setup_done(uint32_t done_ms) { boot_setup_done_ms = done_ms; }
 
 bool arm() {
-#if !UKIYO_TECHART_VENDOR_PRESENT
+#if !UKIYO_PROTOCOL_ENGINE_PRESENT
   Serial.println("EMULATOR=PROTOCOL_ENGINE_UNAVAILABLE");
   return false;
 #else
@@ -254,7 +254,7 @@ bool arm() {
 }
 
 void stop() {
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   ukiyo_bus_abort();
 #endif
   status_leds_all_off();
@@ -265,7 +265,7 @@ void stop() {
 }
 
 void poll() {
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   if (mode == Off) return;
   const bool powered = ukiyo_supply_ok();
 #if UKIYO_DEBUG_LEDS
@@ -438,7 +438,7 @@ void status() {
   Serial.print("BOOT_SETUP_ENTRY_MS="); Serial.println(boot_setup_entry_ms);
   Serial.print("BOOT_PINS_READY_MS="); Serial.println(boot_pins_ready_ms);
   Serial.print("BOOT_SETUP_DONE_MS="); Serial.println(boot_setup_done_ms);
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   ukiyo_supply_ok();
   const int adc = ukiyo_supply_adc();
   Serial.print("LOGIC_VCC_ADC10="); Serial.println(adc);
@@ -510,7 +510,7 @@ void status() {
  * this is permitted while RUNNING; transmission is handled in short,
  * nonblocking USB CDC chunks by poll_trace(). */
 void trace() {
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   if (!Serial) return;
   trace_dump.active = false;
   const uint16_t n = em_trace_count();
@@ -532,7 +532,7 @@ void trace() {
 }
 
 void poll_trace() {
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   if (!trace_dump.active || !Serial) return;
   if (trace_dump.pos == trace_dump.len) {
     if (trace_dump.index >= trace_dump.count) {
@@ -600,7 +600,7 @@ void poll_trace() {
 }
 
 void mark_trace() {
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   if (!em_trace_triggered()) {
     Serial.println("PROTOCOL_TRACE_NOT_TRIGGERED_WAIT_FOR_0x16");
     return;
@@ -616,7 +616,7 @@ void mark_trace() {
 #endif
 }
 void clear_trace() {
-#if UKIYO_TECHART_VENDOR_PRESENT
+#if UKIYO_PROTOCOL_ENGINE_PRESENT
   em_trace_clear();
   Serial.println("PROTOCOL_TRACE_CLEARED");
 #else

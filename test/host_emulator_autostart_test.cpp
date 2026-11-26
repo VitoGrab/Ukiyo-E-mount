@@ -1,5 +1,5 @@
 #include "Arduino.h"
-#include "ukiyo-e-mount/techart_port.h"
+#include "ukiyo-e-mount/emulator.h"
 #include <cassert>
 #include <cstdio>
 #include <string>
@@ -51,7 +51,7 @@ uint32_t ukiyo_trace_time(uint8_t) { return 0; }
 uint8_t ukiyo_trace_level(uint8_t) { return 0; }
 }
 int main() {
-  using namespace ukiyoemount::techart;
+  using namespace ukiyoemount::emulator;
   assert(!active());
   boot_auto_arm(0, 1);
   status_leds_init();  // Mirrors setup() after Serial.begin().
@@ -136,5 +136,5 @@ int main() {
   assert(arm());
   poll();
   assert(init_calls == 3);
-  std::puts("HOST_TECHART_AUTO_REARM_KEEPALIVE=PASS");
+  std::puts("HOST_EMULATOR_AUTO_REARM_KEEPALIVE=PASS");
 }

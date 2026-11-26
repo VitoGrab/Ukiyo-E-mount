@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include "ukiyo-e-mount/camera_link.h"
-#include "ukiyo-e-mount/techart_port.h"
+#include "ukiyo-e-mount/emulator.h"
 #include "ukiyo-e-mount/version.h"
 
 // Auto-arm the camera protocol before USB CDC; qualify LOGIC_VCC before driving outputs.
@@ -31,7 +31,7 @@ void safe_pins() {
 
 void print_status() {
   if (ukiyoemount::camera_link::active()) ukiyoemount::camera_link::status();
-  else ukiyoemount::techart::status();
+  else ukiyoemount::emulator::status();
 }
 
 void handle_command(const char* cmd) {
@@ -61,22 +61,22 @@ void handle_command(const char* cmd) {
     print_status();
   } else if (!strcmp(cmd, "camera trace")) {
     if (ukiyoemount::camera_link::active()) ukiyoemount::camera_link::trace();
-    else ukiyoemount::techart::trace();
+    else ukiyoemount::emulator::trace();
   } else if (!strcmp(cmd, "camera trace clear")) {
-    ukiyoemount::techart::clear_trace();
+    ukiyoemount::emulator::clear_trace();
   } else if (!strcmp(cmd, "camera trace mark")) {
-    ukiyoemount::techart::mark_trace();
+    ukiyoemount::emulator::mark_trace();
   } else if (!strcmp(cmd, "camera stop")) {
-    ukiyoemount::techart::stop();
+    ukiyoemount::emulator::stop();
     ukiyoemount::camera_link::stop();
   } else if (!strcmp(cmd, "camera emulate")) {
     if (ukiyoemount::camera_link::active()) {
       Serial.println("CAMERA_LINK_ACTIVE_USE_x_FIRST");
     } else {
-      ukiyoemount::techart::arm();
+      ukiyoemount::emulator::arm();
     }
   } else if (!strcmp(cmd, "camera listen") || !strcmp(cmd, "camera probe")) {
-    if (ukiyoemount::camera_link::active() || ukiyoemount::techart::active()) {
+    if (ukiyoemount::camera_link::active() || ukiyoemount::emulator::active()) {
       Serial.println("CAMERA_ALREADY_ACTIVE_USE_camera_stop");
     } else {
       ukiyoemount::camera_link::start(!strcmp(cmd, "camera probe"));
@@ -114,16 +114,16 @@ void setup() {
   const uint32_t sketch_entry_ms = millis();
   safe_pins();
   // Set the supply gate and persistent standby BEFORE initializing USB CDC.
-  ukiyoemount::techart::boot_auto_arm(sketch_entry_ms, millis());
+  ukiyoemount::emulator::boot_auto_arm(sketch_entry_ms, millis());
   Serial.begin(115200);  // No wait for Serial or USB host.
   // USB CDC configures the XIAO RX/TX LEDs; apply our selected LED policy afterwards.
-  ukiyoemount::techart::status_leds_init();
-  ukiyoemount::techart::record_setup_done(millis());
+  ukiyoemount::emulator::status_leds_init();
+  ukiyoemount::emulator::record_setup_done(millis());
 }
 
 void loop() {
   // Service the camera first; USB and LED are lower-priority diagnostics.
-  ukiyoemount::techart::poll();
+  ukiyoemount::emulator::poll();
   ukiyoemount::camera_link::poll();
   if (Serial && !banner_printed) {
     banner_printed = true;
@@ -132,6 +132,6 @@ void loop() {
     Serial.println("Type h, l, p, e, s, t or x. x disables auto-arm; e re-enables.");
   }
   poll_command();
-  ukiyoemount::techart::poll_trace();
+  ukiyoemount::emulator::poll_trace();
   ukiyoemount::camera_link::poll();
 }
