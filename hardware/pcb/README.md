@@ -22,7 +22,11 @@ References:
 - Measure the assembly dimensions, mounting hole spacing, contact height and optical clearance against the reference M42–NEX housing.
 - Measure flex thickness, conductor count, contact center spacing and pad widths. Unequal pad widths do not necessarily imply unequal pitch. Connector manufacturer and part number remain unknown.
 - Map each flex conductor to the camera-facing contacts by continuity testing; do not infer the pin order from pad geometry.
-- Evaluate a matching FPC/ZIF connector on an interconnect PCB first. If unavailable, investigate a mechanically retained custom contact interface or a soldered flex termination with strain relief.
+- Evaluate direct wire soldering to the exposed solder pads at the contact assembly first, bypassing the flex tail and ZIF connector. Confirm pad accessibility, continuity, insulation and strain relief on the actual part. A matching FPC/ZIF connector or custom interconnect remains a fallback, not a requirement.
 - Confirm insulation, electrical continuity, absence of shorts and safe power handling before connecting to a camera.
 
 The custom PCB and final mounting remain TBD. This candidate does not replace the existing design requirements.
+
+### Preferred prototype approach
+
+Investigate direct soldering of short wires to the exposed solder points of the original contact assembly. This may eliminate the need for the flex connector, donor SELP1650 mainboard and a custom contact/interconnect PCB. Do not remove the flex or solder until its electrical and mechanical role has been checked on the actual part. The final power interface and any additional components remain TBD pending camera-powered validation. A 3D-printed carrier is the preferred mechanical concept; see [Mechanical integration](../mechanical/README.md). This approach is proposed, not physically validated.
