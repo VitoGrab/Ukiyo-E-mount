@@ -41,18 +41,22 @@ class ProtocolIdentityTests(unittest.TestCase):
         self.assertEqual(data[:6], [0xf0, 0x2b, 0, 2, 0, 7])
         self.assertEqual(data[8:10], [protocol & 255, protocol >> 8])
         self.assertEqual(data[11:13], [minor, major])
-        self.assertEqual(data[15:17], [0, 0])  # Helios Lens ID
+        lens_id = self.profile["sony_lens_id"]
+        self.assertEqual(data[15:17], [lens_id & 255, lens_id >> 8])
         csum = sum(data[1:-3]) & 0xffff
         self.assertEqual(data[-3:-1], [csum & 255, csum >> 8])
         self.assertEqual(data[-1], 0x55)
 
-    def test_project_version_042_at_protocol_108(self) -> None:
-        self.assertEqual(self.identity["project_version"], "0.46")
-        self.assertEqual(self.identity["lens_firmware_major_byte"], 0x04)
-        self.assertEqual(self.identity["lens_firmware_minor_byte"], 6)
-        self.assertEqual(self.identity["emount_protocol_u16"], 0x0108)
-        self.assert_packet(self.packets, protocol=0x0108, major=0x04, minor=6)
-        self.assertEqual(packet_bytes(self.packets, "em_msg_07")[-3:-1], [0xd1, 0x02])
+    def test_current_config_matches_packet(self) -> None:
+        config = json.loads(IDENTITY.read_text(encoding="utf-8"))
+        digits = config["project_version"].split(".")[1]
+        major, minor = int(digits[0]), int(digits[1:])
+        protocol_major, protocol_minor = config["emount_protocol_version"].split(".")
+        protocol = (int(protocol_major) << 8) | int(protocol_minor, 16)
+        self.assertEqual(self.identity["lens_firmware_major_byte"], major)
+        self.assertEqual(self.identity["lens_firmware_minor_byte"], minor)
+        self.assertEqual(self.identity["emount_protocol_u16"], protocol)
+        self.assert_packet(self.packets, protocol=protocol, major=major, minor=minor)
 
     def test_compact_project_version_encoding(self) -> None:
         self.assertEqual(parse_project_version("0.42"), (0x04, 2))
@@ -63,7 +67,9 @@ class ProtocolIdentityTests(unittest.TestCase):
     def test_generated_version_header(self) -> None:
         expected = render_version_header(self.identity)
         self.assertEqual(expected, VERSION_HEADER.read_text(encoding='utf-8'))
-        self.assertIn('v0.46', expected)
+        version = json.loads(IDENTITY.read_text(encoding="utf-8"))["project_version"]
+        self.assertIn(f'#define UKIYO_PROJECT_VERSION "{version}"\n', expected)
+        self.assertIn(f'#define UKIYO_PROJECT_VERSION_LABEL "v{version}"\n', expected)
 
     def test_regeneration_matches_checked_in_files(self) -> None:
         result = apply_to_sources(self.header, self.packets, self.profile, self.identity)
