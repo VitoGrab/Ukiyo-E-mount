@@ -32,7 +32,7 @@ def load_profile(path: pathlib.Path) -> dict:
         raise ProfileError(f'Cannot read profile {path}: {exc}') from exc
     keys = {'profile_id', 'lens_model', 'sony_lens_id', 'lens_type', 'focal_length_min_mm',
             'focal_length_max_mm', 'focal_length_default_mm', 'focal_length_source',
-            'aperture_max_wide_f', 'aperture_max_tele_f', 'aperture_min_f', 'aperture_now_f'}
+            'aperture_max_f', 'aperture_max_tele_f', 'aperture_min_f', 'aperture_now_f'}
     if set(p) != keys:
         raise ProfileError(f'Expected exactly these keys: {sorted(keys)}')
     if not isinstance(p['profile_id'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', p['profile_id']):
@@ -58,7 +58,7 @@ def load_profile(path: pathlib.Path) -> dict:
     if len({p[key] for key in focal_keys}) != 1:
         raise ProfileError('Prime lenses require identical minimum, maximum and default focal lengths')
     try:
-        wide = float(p['aperture_max_wide_f'])
+        wide = float(p['aperture_max_f'])
         tele = float(p['aperture_max_tele_f'])
         narrow = float(p['aperture_min_f'])
         reported = float(p['aperture_now_f'])
@@ -179,7 +179,7 @@ def apply_to_sources(header: str, packets: str, profile: dict, identity: dict) -
     lens_id = profile['sony_lens_id']
     focal_mm10 = profile['focal_length_default_mm'] * 10
     aperture_values = {
-        'MAX': (profile['aperture_max_wide_f'], 'widest aperture; f-number minimum'),
+        'MAX': (profile['aperture_max_f'], 'widest aperture; f-number minimum'),
         'MIN': (profile['aperture_min_f'], 'narrowest aperture; f-number maximum'),
         'NOW': (profile['aperture_now_f'], 'reported current aperture'),
     }
@@ -238,7 +238,7 @@ def main() -> int:
         print('LENS_MODEL=' + p['lens_model'])
         print('SONY_LENS_ID=' + str(p['sony_lens_id']) + ' (experimental; validate EXIF)')
         print('FOCAL_MM=' + str(p['focal_length_default_mm']))
-        print('APERTURE_MAX_WIDE_F=' + str(p['aperture_max_wide_f']))
+        print('APERTURE_MAX_F=' + str(p['aperture_max_f']))
         print('APERTURE_MAX_TELE_F=' + str(p['aperture_max_tele_f']))
         print('APERTURE_MIN_F=' + str(p['aperture_min_f']))
         print('APERTURE_NOW_F=' + str(p['aperture_now_f']) + ' (fixed until sensing)')

@@ -33,7 +33,7 @@ The application changes the `include/emount/emount.h` lens constants and the tem
 | `lens_model` | ASCII name sent in message `0x3F`; up to 63 bytes |
 | `sony_lens_id` | 16-bit ID in message `0x07`, payload bytes 9–10 |
 | `focal_length_default_mm` | Reported focal length, used in E-mount packet templates |
-| `aperture_max_wide_f` | Maximum opening at the shortest focal length (f/2 for the current prime); transmitted as `EM_APERTURE_MAX` |
+| `aperture_max_f` | Maximum opening at the shortest focal length (f/2 for the current prime); transmitted as `EM_APERTURE_MAX` |
 | `aperture_max_tele_f` | Maximum opening at the longest focal length; must equal the wide value for primes |
 | `aperture_min_f` | Narrowest aperture (f/16); transmitted as `EM_APERTURE_MIN` |
 | `aperture_now_f` | Present reported f-number, transmitted as `EM_APERTURE_NOW`; stays f/2 until an aperture sensor is added |

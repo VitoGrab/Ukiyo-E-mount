@@ -7,7 +7,7 @@
   "focal_length_max_mm": 58,
   "focal_length_default_mm": 58,
   "focal_length_source": "fixed",
-  "aperture_max_wide_f": 2,
+  "aperture_max_f": 2,
   "aperture_max_tele_f": 2,
   "aperture_min_f": 16,
   "aperture_now_f": 2
