@@ -7,10 +7,14 @@ This directory describes the intended physical Ukiyo-E-mount adapter. The integr
 | Component | Quantity | Status | Reference |
 | --- | --- | --- | --- |
 | Seeed Studio XIAO SAMD21 | 1 | Selected; firmware tested on this board | [Manufacturer product page](https://www.seeedstudio.com/Seeeduino-XIAO-Arduino-Microcontroller-SAMD21-Cortex-M0-p-4426.html) · [Technical documentation](https://wiki.seeedstudio.com/Seeeduino-XIAO/) |
-| Specific mechanical lens-to-Sony E (NEX) adapter | 1 | Selected reference listing; exact listing designation and direct item URL to be confirmed | [Reference listing (AliExpress share URL)](https://a.aliexpress.com/_EwfrSLc) |
+| M42–NEX mechanical adapter (specific housing design) | 1 | Reference housing selected; integration pending | [Original purchased adapter](https://www.aliexpress.com/item/32882376567.html) · [Alternative listing](https://www.aliexpress.com/item/1005004573509701.html) |
 | Custom PCB and mechanical mounting inside the adapter | 1 assembly | TBD | [PCB](pcb/README.md) · [Mechanical integration](mechanical/README.md) |
 
-The reference adapter is a specific mechanical design, not an arbitrary lens adapter with the same mount designation. Internal dimensions and contact-board mounting clearances must be verified before substituting another model. The AliExpress reference is provisional until the original product ID and mount designation have been confirmed.
+The reference adapter is a specific mechanical design, not an arbitrary lens adapter with the same mount designation. Internal dimensions and contact-board mounting clearances must be verified before substituting another model. The original purchased adapter is the mechanical reference. The alternative listing appears to offer the same housing design according to the project maintainer; dimensional interchangeability has not been independently verified. These listings are examples, not required sellers.
+
+### Adapter identification
+
+A photograph of the reference M42–NEX adapter will be added here by the project maintainer (TBD). Use the housing design and, once available, the dimensional requirements in [mechanical/README.md](mechanical/README.md) to identify suitable equivalents, rather than relying on seller names or product listings alone.
 
 For the microcontroller, use the SAMD21 model, not another XIAO family member. The final assembly's connector/header and clearance requirements are TBD.
 
