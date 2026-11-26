@@ -1,5 +1,7 @@
 Upstream: https://github.com/weiziqian/E-mount-impl-on-Techart-EA9
 Commit: bbf175c641f949355fc605c644253dab427c0919
-License: MIT (see LICENSE)
+License: MIT (see Techart-LICENSE)
 Modifications: GPIO abstraction, power-fail init exits, Helios 58mm f/2 constants.
 Original packet tables, parser, reply queue, status engine retained.
+
+The imported implementation is now integrated into src/emount and include/emount and maintained independently. Subsequent changes are recorded in Ukiyo-E-mount Git history.
