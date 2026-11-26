@@ -70,3 +70,13 @@ The active packet templates live in `src/emount/emount_packets.c`. The native MF
 Profiles now declare `lens_type`, `focal_length_min_mm`, `focal_length_max_mm`, `focal_length_default_mm`, and `focal_length_source`. For a prime, all three focal lengths must be equal and the source must be `fixed`. Zoom profiles are rejected (see [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5)). The JSON range is not the on-wire encoding: primes still use zero in the second focal-length field of message 0x08. This schema change preserves the existing generated packets; runtime storage is a separate implementation step.
 
 Maximum aperture is specified at both focal-range endpoints. For primes both JSON values must match; message `0x08` payload byte 20 carries the maximum aperture in packed BCD, while byte 21 remains zero. Future zoom profiles may declare different endpoint values (for example f/3.5–5.6), or equal values for a constant-aperture zoom. No zoom support or interpolation is implemented yet. See [message 0x08](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x08.md) and issue #5.
+
+## Runtime staging (development)
+
+The prime-only `ukiyo_lens_profile` structure is an in-memory representation, not a flash format. `ukiyo_profile_stage()` copies a validated profile while the bus is idle. `ukiyo_profile_apply()` updates the seven metadata templates at full initialization; short wake preserves the active profile. The generated compile-time defaults remain as a fallback until persistent storage and an external uploader are implemented. Do not call these functions during active communication.
+
+Host regression (no Arduino dependencies):
+
+```sh
+cc -std=c99 -Wall -Wextra -Iinclude/emount src/emount/emount_packets.c test/host_runtime_lens_profile_test.c -o /tmp/ukiyo-profile-test && /tmp/ukiyo-profile-test
+```
