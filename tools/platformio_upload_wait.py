@@ -11,6 +11,7 @@ from serial import Serial, SerialException
 from platformio.public import list_serial_ports
 
 WAIT_TIMEOUT_SECONDS = 15.0
+SAME_PORT_FALLBACK_SECONDS = 3.0
 POLL_INTERVAL_SECONDS = 0.25
 
 
@@ -20,7 +21,9 @@ def wait_for_new_serial_port(env, before):
     previous_port = env.subst("$UPLOAD_PORT")
     new_port = None
     current_ports = previous_ports
-    deadline = monotonic() + WAIT_TIMEOUT_SECONDS
+    started = monotonic()
+    deadline = started + WAIT_TIMEOUT_SECONDS
+    saw_previous_port_disappear = previous_port not in previous_snapshot
 
     print(
         "Waiting for the XIAO SAM-BA upload port "
@@ -36,7 +39,19 @@ def wait_for_new_serial_port(env, before):
                 new_port = port
                 break
 
+        if previous_port not in current_ports:
+            saw_previous_port_disappear = True
         previous_snapshot = set(current_ports)
+        if (
+            new_port is None
+            and previous_port in current_ports
+            and not saw_previous_port_disappear
+            and monotonic() - started >= SAME_PORT_FALLBACK_SECONDS
+        ):
+            # No USB disconnect/re-enumeration was observed. Try the original
+            # port now; the upload retry task will issue a fresh 1200-baud touch
+            # if the application port was not actually switched to SAM-BA.
+            new_port = previous_port
         if new_port is None:
             sleep(POLL_INTERVAL_SECONDS)
 
