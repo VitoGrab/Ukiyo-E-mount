@@ -42,3 +42,17 @@ class LensProfileTests(unittest.TestCase):
         for value in (0, 501, True, 58.5, "58"):
             with self.subTest(value=value), self.assertRaises(ProfileError):
                 self.validate(focal_length_default_mm=value)
+
+    def test_matching_prime_endpoint_apertures(self):
+        profile = self.validate(aperture_max_wide_f=1.8,
+                                aperture_max_tele_f=1.8)
+        self.assertEqual(profile["aperture_max_wide_f"], 1.8)
+
+    def test_unequal_prime_endpoint_apertures_rejected(self):
+        with self.assertRaisesRegex(ProfileError, "identical wide and tele"):
+            self.validate(aperture_max_wide_f=2.0, aperture_max_tele_f=2.8)
+
+    def test_invalid_endpoint_apertures_rejected(self):
+        for value in (0, -1, float("nan"), float("inf"), None):
+            with self.subTest(value=value), self.assertRaises(ProfileError):
+                self.validate(aperture_max_tele_f=value)

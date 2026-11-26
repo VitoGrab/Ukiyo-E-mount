@@ -33,7 +33,8 @@ The application changes the `include/emount/emount.h` lens constants and the tem
 | `lens_model` | ASCII name sent in message `0x3F`; up to 63 bytes |
 | `sony_lens_id` | 16-bit ID in message `0x07`, payload bytes 9–10 |
 | `focal_length_default_mm` | Reported focal length, used in E-mount packet templates |
-| `aperture_max_f` | Widest aperture (f/2); transmitted as `EM_APERTURE_MAX` |
+| `aperture_max_wide_f` | Maximum opening at the shortest focal length (f/2 for the current prime); transmitted as `EM_APERTURE_MAX` |
+| `aperture_max_tele_f` | Maximum opening at the longest focal length; must equal the wide value for primes |
 | `aperture_min_f` | Narrowest aperture (f/16); transmitted as `EM_APERTURE_MIN` |
 | `aperture_now_f` | Present reported f-number, transmitted as `EM_APERTURE_NOW`; stays f/2 until an aperture sensor is added |
 
@@ -67,3 +68,5 @@ The active packet templates live in `src/emount/emount_packets.c`. The native MF
 ## Prime-only schema
 
 Profiles now declare `lens_type`, `focal_length_min_mm`, `focal_length_max_mm`, `focal_length_default_mm`, and `focal_length_source`. For a prime, all three focal lengths must be equal and the source must be `fixed`. Zoom profiles are rejected (see [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5)). The JSON range is not the on-wire encoding: primes still use zero in the second focal-length field of message 0x08. This schema change preserves the existing generated packets; runtime storage is a separate implementation step.
+
+Maximum aperture is specified at both focal-range endpoints. For primes both JSON values must match; message `0x08` payload byte 20 carries the maximum aperture in packed BCD, while byte 21 remains zero. Future zoom profiles may declare different endpoint values (for example f/3.5–5.6), or equal values for a constant-aperture zoom. No zoom support or interpolation is implemented yet. See [message 0x08](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x08.md) and issue #5.
