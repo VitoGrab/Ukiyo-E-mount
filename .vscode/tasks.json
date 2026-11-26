@@ -51,23 +51,6 @@
       }
     },
     {
-      "label": "Ukiyo: Build Debug",
-      "type": "process",
-      "command": "/opt/platformio/bin/pio",
-      "args": [
-        "run",
-        "-e",
-        "seeed_xiao"
-      ],
-      "dependsOn": "Ukiyo: Verify Lens Profile",
-      "dependsOrder": "sequence",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
       "label": "Ukiyo: Build Production",
       "type": "process",
       "command": "/opt/platformio/bin/pio",
