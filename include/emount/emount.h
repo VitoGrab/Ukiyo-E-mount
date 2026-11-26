@@ -383,28 +383,8 @@ extern volatile uint16_t em_events_sent;
  */
 extern volatile uint16_t em_stop_n;  /* how many Stop records have arrived */
 
-/* THE focal length, in mm x 10 -- the one place it is written down.
- *
- * The stock table is internally inconsistent: message 0x05 says 400 (40.0 mm,
- * inherited from the Canon EF 40mm f/2.8 STM descriptor TECHART cloned) while
- * message 0x28's focal pair says 500 (50.0 mm).  Both are sent, so the adapter
- * tells the body two different focal lengths depending on which message it
- * asks for.
- *
- * The 52.0 mm telltale did its job (NOTES.md §70): a photo came out of the a9
- * II tagged 52 mm, so the body reads its focal length from a field we write and
- * both messages now agree.  Back to 50.0 mm.
- *
- * Only initialises em_focal_mm10 below; nothing else may use it.  The
- * messages get the focal length from that word at start-up (em_init), and
- * the distance conversions read it too. */
+/* Generated fallback focal length in tenths of a millimetre. */
 #define EM_FOCAL_MM10 580u /* Ukiyo lens profile */
-
-/* The same value as a variable, for the code that computes with it.  Defined
- * in emount_packets.c, so no other file can fold it into an instruction: the
- * word in flash is the only copy, and the updater can patch it
- * (tools/win_updater). */
-extern const uint16_t em_focal_mm10;
 
 /* THE DEFOCUS SCALE: how many protocol position units one defocus unit is
  * worth.  Reported in message 0x06 payload[13..14], and used by everything
@@ -417,50 +397,8 @@ extern const uint16_t em_focal_mm10;
 /* The defocus scale as currently advertised, read back from the frame. */
 uint16_t em_defocus_scale(void);
 
-/* THE APERTURE this adapter declares -- maximum, minimum, and the one it is at
- * right now.  Three constants because the protocol carries three fields; one
- * number because an LM-EA9 has no iris.  It carries a manual Leica M lens whose
- * aperture ring it cannot read and cannot move, so the honest report is a fixed
- * aperture: wide open, permanently, and no range for the body to drive.
- *
- * ALL THREE ARE APERTURE VALUES -- the u16 `256 * AV + 4096` scale that
- * message 0x05 payload[0..1] and message 0x28 payload[9..10] carry directly
- * (aperture_value.md).  Read one straight off:
- *
- *     AV = (value - 4096) / 256        F = 2^(AV / 2)
- *     0x11C0 = 4544 -> AV = 1.75 -> F = 2^0.875 = f/1.834
- *
- * The high byte alone is legible: 0x11 = 17, and 17 - 0x10 = 1 = AV's whole
- * part, so the whole stops read off the top byte and the low byte is the
- * fraction of a stop.  f/1.4 is 0x1100, f/2.0 is 0x1200, f/2.8 is 0x1300.
- *
- * 0x11C0 is chosen rather than a rounder number because it lands EXACTLY on
- * the coarser descriptor grid below -- descriptor 0x16, which converts back
- * to 4544 with no rounding -- so the two encodings agree to the bit.
- *
- * The OTHER encoding, the Canon-convention descriptor of message 0x05
- * pl[44..59], is derived from these by EM_AV_DESC (emount_packets.c) rather
- * than written out separately -- one number per fact, so the two encodings cannot
- * disagree.  It is the coarser of the two at 1/8 stop, so a value that is not
- * a multiple of 32 above 4096 rounds when it goes there.
- *
- * THE MINIMUM IS THE MAXIMUM.  An adapter with no iris has no range, and the
- * stock's f/90 is a fiction: a body may command anywhere in that range and the
- * transmission is f/1.8 regardless.
- *
- * Restoring f/90 was TRIED and changed nothing: the camera still re-metered
- * after every exposure, and start-up hung as well (NOTES.md 89).  So the
- * fiction buys nothing here, and the honest single point is what stands.
- *
- * WHY f/1.8 AND NOT f/2.0.  It used to be f/2.0, the stock's own boot value.
- * It moved with an f/1.8 slot B type-1 row this build once sent in message
- * 0x28; that row is gone (the A7 IV ignores type 1 there, see EM_SLOT_B_TYPE0),
- * and f/1.8 stayed.
- *
- * Four bytes of the descriptor block now differ from a stock LM-EA9 --
- * pl[44], pl[46], pl[51] take descriptor 0x16 instead of 0x18, and pl[52] is
- * the maximum instead of the stock's f/90.  The test enumerates exactly those
- * four and checks every other byte against a stock literal. */
+/* Generated fallback aperture values: 4096 + 512 * log2(f-number).
+ * Runtime profile application updates the corresponding packet fields. */
 #define EM_APERTURE_MAX  0x1200u /* widest aperture; f-number minimum */
 #define EM_APERTURE_MIN  0x1800u /* narrowest aperture; f-number maximum */
 #define EM_APERTURE_NOW  0x1200u /* reported current aperture */

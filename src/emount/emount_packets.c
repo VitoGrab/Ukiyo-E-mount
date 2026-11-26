@@ -1,9 +1,8 @@
 /* emount_packets.c -- the reply frames this lens sends, one template per
  * message.
  *
- * Fixed content lives here and is edited here.  The per-lens parameters
- * (README 4.4) are macros from emount.h, spliced into the templates at compile
- * time:
+ * Fixed protocol templates and generated fallback values live here.
+ * ukiyo_profile_apply() replaces lens-specific fields before each full init:
  *
  *   EM_APERTURE_NOW   0x05 pl[0..3], 0x1B pl[0..3]
  *   EM_APERTURE_MAX   0x05 pl[44], pl[46], pl[51]  (as a descriptor byte)
@@ -17,9 +16,8 @@
  *
  * Only what changes at run time (positions, status, events,
  * the 0x34 echo) is written by emount.c -- and the focal length, which
- * em_init writes from em_focal_mm10 into 0x05 pl[24..27], 0x08 pl[16..17]
- * (whole mm, BCD), 0x28 pl[4..7] and 0x35 pl[4..7], so that the one word in
- * flash is the only copy (tools/win_updater).  Message 0x0A has no template: the
+ * ukiyo_profile_apply() writes into 0x05 pl[24..27], 0x08 pl[16..17],
+ * 0x28 pl[4..7] and 0x35 pl[4..7]. Message 0x0A has no template: the
  * reply is the body's request, echoed (em_send_id).
  *
  * Messages 0x32, 0x4C and 0x5A from the stock table are gone: none is in the
@@ -49,6 +47,8 @@
  *                     circle (msg_0x08.md) */
 #include "emount_packets.h"
 #include "emount.h"
+#include "lens_profile.h"
+#include <string.h>
 
 /* A u16 as the two little-endian bytes of a template. */
 #define EM_LO(v) ((uint8_t)((v) & 0xFFu))
@@ -319,7 +319,93 @@ uint8_t em_msg_3F[EM_LEN_3F] = {
     0x05, 0x55,
 };
 
-const uint16_t em_focal_mm10 = EM_FOCAL_MM10;
+static ukiyo_lens_profile staged_profile;
+static uint8_t profile_staged;
+
+static void profile_put16(uint8_t *frame, unsigned offset, uint16_t value)
+{
+    frame[offset] = EM_LO(value);
+    frame[offset + 1] = EM_HI(value);
+}
+
+static uint8_t profile_bcd2(uint16_t n)
+{
+    return (uint8_t)(((n / 10u % 10u) << 4) | (n % 10u));
+}
+
+static void profile_checksum(uint8_t *frame, unsigned length)
+{
+    uint16_t sum = 0;
+    unsigned i;
+    for (i = 1; i < length - 3; ++i) sum += frame[i];
+    profile_put16(frame, length - 3, sum);
+}
+
+uint8_t ukiyo_profile_stage(const ukiyo_lens_profile *p)
+{
+    unsigned i;
+    if (!p || p->focal_mm < 1u || p->focal_mm > 500u ||
+        p->aperture_max_av < 4096u || p->aperture_now_av > 5719u ||
+        p->aperture_max_av > p->aperture_now_av ||
+        p->aperture_now_av > p->aperture_min_av ||
+        p->aperture_min_av > 7168u || !p->model[0]) return 0;
+    for (i = 0; i < sizeof(p->model) && p->model[i]; ++i) {
+        if ((uint8_t)p->model[i] > 127u) return 0;
+    }
+    if (i == sizeof(p->model)) return 0;
+    staged_profile = *p;
+    memset(staged_profile.model + i, 0, sizeof(p->model) - i);
+    profile_staged = 1;
+    return 1;
+}
+
+void ukiyo_profile_apply(void)
+{
+    uint16_t mm10;
+    if (!profile_staged) {
+        /* The existing generated templates are the built-in fallback.
+         * Capture their identity once, before modifying any packet. */
+        ukiyo_lens_profile p = {
+            EM_FOCAL_MM10 / 10u,
+            (uint16_t)(em_msg_07[15] | ((uint16_t)em_msg_07[16] << 8)),
+            EM_APERTURE_MAX, EM_APERTURE_MIN, EM_APERTURE_NOW, {0}
+        };
+        memcpy(p.model, em_msg_3F + 7, sizeof(p.model));
+        if (!ukiyo_profile_stage(&p)) return;
+    }
+    const ukiyo_lens_profile *p = &staged_profile;
+    mm10 = (uint16_t)(p->focal_mm * 10u);
+
+    /* Runtime focal values: status, nameplate and capture metadata. */
+    profile_put16(em_msg_05, 30, mm10);
+    profile_put16(em_msg_05, 32, mm10);
+    profile_put16(em_msg_28, 10, mm10);
+    profile_put16(em_msg_28, 12, mm10);
+    profile_put16(em_msg_35, 10, mm10);
+    profile_put16(em_msg_35, 12, mm10);
+    em_msg_08[22] = profile_bcd2(p->focal_mm / 100u);
+    em_msg_08[23] = profile_bcd2(p->focal_mm);
+    em_msg_08[24] = em_msg_08[25] = 0; /* prime */
+
+    /* Preserve the existing fixed aperture behavior, not iris actuation. */
+    profile_put16(em_msg_05, 6, p->aperture_now_av);
+    profile_put16(em_msg_05, 8, p->aperture_now_av);
+    profile_put16(em_msg_1B, 6, p->aperture_now_av);
+    profile_put16(em_msg_1B, 8, p->aperture_now_av);
+    em_msg_05[50] = em_msg_05[52] = em_msg_05[57] =
+        EM_AV_DESC(p->aperture_max_av);
+    em_msg_05[58] = EM_AV_DESC(p->aperture_min_av);
+    profile_put16(em_msg_08, 6, p->aperture_max_av);
+    profile_put16(em_msg_08, 8, p->aperture_min_av);
+    em_msg_08[26] = EM_F_BCD(p->aperture_max_av);
+    em_msg_08[27] = 0; /* prime */
+
+    profile_put16(em_msg_07, 15, p->lens_id);
+    memcpy(em_msg_3F + 7, p->model, sizeof(p->model));
+    profile_checksum(em_msg_07, EM_LEN_07);
+    profile_checksum(em_msg_3F, EM_LEN_3F);
+    /* Other frames are stamped with fresh checksums by the sender. */
+}
 
 const struct ea9_packet ea9_packets[EA9_PACKET_COUNT] = {
 	{ 0x01, em_msg_01, EM_LEN_01 },
