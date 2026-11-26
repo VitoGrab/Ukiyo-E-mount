@@ -58,10 +58,14 @@ constexpr uint8_t kLedUserPin = LED_BUILTIN;
 constexpr uint8_t kLedRxPin = PIN_LED_RXL;
 constexpr uint8_t kLedTxPin = PIN_LED_TXL;
 #if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
-constexpr uint32_t kLedActivityPulseMs = 50u;
+constexpr uint32_t kLedHandshakePulseMs = 100u;
+constexpr uint32_t kLedErrorPulseMs = 300u;
 bool led_vcc_on = false;
-uint32_t led_last_rx_frames = 0;
-uint32_t led_last_tx_frames = 0;
+bool led_last_handshake = false;
+uint32_t led_last_bad_frames = 0;
+uint32_t led_last_req_dropped = 0;
+uint32_t led_last_rec_unknown = 0;
+uint32_t led_last_rx_errors = 0;
 uint32_t led_rx_until_ms = 0;
 uint32_t led_tx_until_ms = 0;
 bool led_rx_active = false;
@@ -69,11 +73,45 @@ bool led_tx_active = false;
 #endif
 
 // RX/TX are also used by the SAMD USB CDC core. Keep them high-impedance
-// between camera activity pulses so USB traffic cannot create false indications.
+// between status pulses so USB traffic cannot create false indications.
 void led_release(uint8_t pin) {
   pinMode(pin, INPUT);
   digitalWrite(pin, LOW);  // INPUT + LOW disables the internal pull-up.
 }
+
+#if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
+void led_snapshot_diagnostics() {
+  led_last_bad_frames = em_bad_frames;
+  led_last_req_dropped = em_req_dropped;
+  led_last_rec_unknown = em_rec_unknown;
+  led_last_rx_errors = em_rx_errors;
+}
+
+bool led_counter_increased(uint32_t current, uint32_t& previous) {
+  if (current < previous) {
+    // A protocol/session reinitialization reset the counter; rebase silently.
+    previous = current;
+    return false;
+  }
+  if (current == previous) return false;
+  previous = current;
+  return true;
+}
+
+void led_update_output(uint8_t pin, uint32_t until_ms,
+                       bool& active, uint32_t now_ms) {
+  const bool should_be_on =
+      static_cast<int32_t>(until_ms - now_ms) > 0;
+  if (should_be_on && !active) {
+    digitalWrite(pin, LOW);  // Set active-low latch before enabling output.
+    pinMode(pin, OUTPUT);
+    active = true;
+  } else if (!should_be_on && active) {
+    led_release(pin);
+    active = false;
+  }
+}
+#endif
 
 void status_leds_init_internal() {
   digitalWrite(kLedUserPin, HIGH);
@@ -82,12 +120,12 @@ void status_leds_init_internal() {
   led_release(kLedTxPin);
 #if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
   led_vcc_on = false;
-  led_last_rx_frames = em_frames_rx;
-  led_last_tx_frames = em_frames_tx;
+  led_last_handshake = em_handshake_done != 0;
   led_rx_until_ms = 0;
   led_tx_until_ms = 0;
   led_rx_active = false;
   led_tx_active = false;
+  led_snapshot_diagnostics();
 #endif
 }
 
@@ -98,36 +136,16 @@ void status_leds_all_off() {
   led_release(kLedTxPin);
 #if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
   led_vcc_on = false;
-  led_last_rx_frames = em_frames_rx;
-  led_last_tx_frames = em_frames_tx;
+  led_last_handshake = em_handshake_done != 0;
   led_rx_until_ms = 0;
   led_tx_until_ms = 0;
   led_rx_active = false;
   led_tx_active = false;
+  led_snapshot_diagnostics();
 #endif
 }
 
 #if UKIYO_DEBUG_LEDS && UKIYO_TECHART_VENDOR_PRESENT
-void update_activity_led(uint8_t pin, uint32_t frames,
-                         uint32_t& last_frames, uint32_t& active_until_ms,
-                         bool& active, uint32_t now_ms) {
-  if (frames != last_frames) {
-    last_frames = frames;
-    active_until_ms = now_ms + kLedActivityPulseMs;
-  }
-
-  const bool should_be_on =
-      static_cast<int32_t>(active_until_ms - now_ms) > 0;
-  if (should_be_on && !active) {
-    digitalWrite(pin, LOW);  // Set the active-low output latch before enabling it.
-    pinMode(pin, OUTPUT);
-    active = true;
-  } else if (!should_be_on && active) {
-    led_release(pin);
-    active = false;
-  }
-}
-
 void status_leds_update(bool vcc_detected) {
   if (led_vcc_on != vcc_detected) {
     digitalWrite(kLedUserPin, vcc_detected ? LOW : HIGH);
@@ -135,10 +153,25 @@ void status_leds_update(bool vcc_detected) {
   }
 
   const uint32_t now_ms = millis();
-  update_activity_led(kLedRxPin, em_frames_rx, led_last_rx_frames,
-                      led_rx_until_ms, led_rx_active, now_ms);
-  update_activity_led(kLedTxPin, em_frames_tx, led_last_tx_frames,
-                      led_tx_until_ms, led_tx_active, now_ms);
+  const bool handshake_done = em_handshake_done != 0;
+  if (handshake_done && !led_last_handshake) {
+    // RX LED: one short confirmation after the body handshake (0x0A) completes.
+    led_rx_until_ms = now_ms + kLedHandshakePulseMs;
+  }
+  led_last_handshake = handshake_done;
+
+  bool protocol_error = false;
+  protocol_error |= led_counter_increased(em_bad_frames, led_last_bad_frames);
+  protocol_error |= led_counter_increased(em_req_dropped, led_last_req_dropped);
+  protocol_error |= led_counter_increased(em_rec_unknown, led_last_rec_unknown);
+  protocol_error |= led_counter_increased(em_rx_errors, led_last_rx_errors);
+  if (protocol_error) {
+    // TX LED: longer pulse for malformed frames, unknown records or lost RX data.
+    led_tx_until_ms = now_ms + kLedErrorPulseMs;
+  }
+
+  led_update_output(kLedRxPin, led_rx_until_ms, led_rx_active, now_ms);
+  led_update_output(kLedTxPin, led_tx_until_ms, led_tx_active, now_ms);
 }
 #endif
 

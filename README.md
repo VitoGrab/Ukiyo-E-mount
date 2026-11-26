@@ -55,7 +55,7 @@ Target states: `LISTENING` -> `NEGOTIATING` -> `RUNNING` -> `LISTENING`, with ex
 - On confirmed `0x16` shutdown, release driven lines, clear per-session queues/timers/status and return to passive listening. Where sleep is confirmed, suspend/resume instead of falsely disconnecting.
 - Implement a configurable, evidence-based loss-of-traffic watchdog (initially considering `0x0A`) only in states where keepalive is expected. Reset parser, link state and baud appropriately before accepting a new session.
 - Keep USB serial as optional, nonblocking diagnostics only: status, state transitions, trace counters and protocol errors. Unplugging USB/closing the monitor must not change behavior.
-- Use compile-time LED modes: debug builds show VCC on the User LED and pulse RX/TX LEDs on received/transmitted protocol frames; production builds keep all GPIO-controlled LEDs off. RX/TX pins stay high-impedance between pulses to avoid false USB CDC activity indications.
+- Use compile-time LED modes: debug builds show VCC on the User LED, pulse RX when the body handshake completes, and pulse TX for protocol/transport errors. Normal frame traffic and keepalives do not trigger LEDs. Production builds keep all GPIO-controlled LEDs off.
 
 **Autonomous acceptance tests:**
 
@@ -72,7 +72,7 @@ The numbered list below retains the complete long-term acceptance criteria.
 3. Continue normal camera use until confirmed `0x16` or supported keepalive-loss detection; release lines safely.
 4. Camera power cycle, sleep/wake and reconnection all restore shooting without reflashing or entering a serial command.
 5. USB monitoring remains strictly observational and can be attached/detached at any time.
-6. Debug LED indications reflect VCC and protocol-frame activity without disrupting timing; production builds keep GPIO-controlled LEDs off.
+6. Debug LEDs indicate VCC, completed handshake and protocol/transport errors without per-frame activity; production builds keep GPIO-controlled LEDs off.
 
 ### Stage 4.6.1: firmware and E-mount protocol identity
 
@@ -118,13 +118,23 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 ### Technical design decisions
 
+### VS Code development tasks
+
+The workspace tasks include separate debug and production builds/uploads, lens-profile apply/verification, serial monitoring and cleanup. Build tasks verify generated lens-profile sources before proceeding.
+
+- `Ukiyo: Apply Lens Profile` runs `tools/apply_lens_profile.py`.
+- `Ukiyo: Verify Lens Profile` runs the same tool with `--verify-only`.
+- `Ukiyo: Upload` and `Ukiyo: Upload Production` use `tools/upload_with_retry.py`: build once, then retry the SAM-BA upload up to three times.
+- The PlatformIO post extra-script extends bootloader-port discovery from the upstream five-second wait to fifteen seconds. It does not alter the 1200-baud reset touch or BOSSA transfer parameters.
+- If automatic reset still fails, use the XIAO's documented double-reset procedure to enter its bootloader, then retry the upload task.
+
 #### XIAO LED build modes
 
 - `pio run -e seeed_xiao` builds the debug configuration (default).
 - `pio run -e seeed_xiao_production` builds the production configuration.
 - Add `-t upload` to either command to flash that exact build.
 
-Debug mode: User LED is solid while LOGIC_VCC is detected; RX and TX LEDs pulse for received body frames and transmitted emulator responses. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
+Debug mode: User LED is solid while LOGIC_VCC is detected; RX gives a short pulse after the 0x0A handshake completes; TX gives a longer pulse for malformed frames, dropped requests, unknown/incomplete instruction records or UART receive-ring overflow. Normal frame traffic and keepalives do not trigger LEDs. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
 
 - Keep the proven PlatformIO `seeed_xiao` board configuration.
 - Use USB CDC only for diagnostics in early stages. Never put diagnostic
