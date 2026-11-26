@@ -141,13 +141,8 @@
     },
     {
       "label": "Ukiyo: Clean",
-      "type": "process",
-      "command": "/opt/platformio/bin/pio",
-      "args": [
-        "run",
-        "-t",
-        "clean"
-      ],
+      "type": "shell",
+      "command": "/opt/platformio/bin/pio run -e seeed_xiao -t clean && /opt/platformio/bin/pio run -e seeed_xiao_production -t clean",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
