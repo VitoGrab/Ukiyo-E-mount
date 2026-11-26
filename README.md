@@ -23,8 +23,8 @@ to other lenses including zoom lenses.
 | 4.5. Body lifecycle capture | Trace 0x16, sleep/wake, loss of lens rail and remount | Validated short wake, full re-init after removal and runtime capture | Completed on a6000 (2026-11-25) |
 | 4.6. Body-driven autonomous operation | 0x16 electrical shutdown, short wake at 1.5 Mbaud, supply-loss rearm and optional USB trace | Repeated wake, full init, remount, shooting and EXIF | Completed for USB-powered a6000 prototype (2026-11-25); LED/boot refinements in 4.7 |
 | 4.6.1. Protocol identity / EXIF experiment | One project version generates Sony firmware bytes; retain validated E-mount protocol 1.08 | Compare camera Version screen and ARW/JPG EXIF, retaining MF/wake behavior | Compact version 0.42 maps to 04.002; suffix 04.003 observed in a6000 EXIF; capture/session behaviour remains open in issue #3 |
-| 4.6.2. Powerbank autonomy test | XIAO powered from a powerbank, with no PC/USB data connection | Full init, shooting and repeated 0x0B wake work without USB CDC host | Planned |
-| 4.7. Codebase refactor and fast startup | Consolidate state handling, remove obsolete bench modes, minimize pre-ready startup work | Preserve the powerbank baseline; pins are ready early for 0x01 and 0x0B | Planned after 4.6.2 |
+| 4.6.2. Powerbank autonomy test | XIAO powered from a powerbank, with no PC/USB data connection | Full init, shooting and repeated 0x0B wake work without USB CDC host | Tested; powerbank auto-off limits standby validation |
+| 4.7. Codebase refactor and fast startup | Consolidate state handling, remove obsolete bench modes, minimize pre-ready startup work | Preserve the powerbank baseline; pins are ready early for 0x01 and 0x0B | In progress (v0.47) |
 | 4.8. Additional body compatibility | Test a6500 after refactoring; retain a6000 regression suite | Mount, MF, EXIF, sleep/wake and remount pass on both bodies | Planned |
 | 5. Standalone power | Validate XIAO supply from camera rail with regulated/protected power path | Repeated mounts and wake cycles work without USB or backfeeding | Planned |
 | 6. Mechanical integration | Contact PCB and non-destructive mount/adapter packaging | Secure fit, no shorts, optics unaffected | Planned |
@@ -78,13 +78,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.46`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.46` -> `pl[6]=0x04`, `pl[5]=0x06`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
-- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.006`.
+- The current project version is `0.47`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.47` -> `pl[6]=0x04`, `pl[5]=0x07`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.007`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that the generated packet sources and compile-time version header match the JSON configuration.
-- Monitor startup, `h` help and status output use the generated `v0.46` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.47` label; there is no separate version command.
 
 ### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
@@ -97,9 +97,11 @@ The numbered list below retains the complete long-term acceptance criteria.
 - Confirm that disconnecting or reconnecting a PC is not required for operation. A monitor may be attached afterwards for diagnostics, but it must not be part of the tested operating path.
 - Record any startup delay, missed first request, reset, brownout or wake failure before changing the code.
 
+Powerbank testing was performed before Stage 4.7. Standby validation remains limited by powerbank auto-off; retain USB-powered lifecycle regression tests.
+
 **Stage 4.7 — codebase refactor and startup-path optimization**
 
-- Only after the powerbank baseline passes, consolidate mode/state handling, remove obsolete bench modes and misleading version banners, and replace project-owned Techart-specific names while retaining upstream license, copyright and provenance notices.
+- Following the powerbank tests, consolidate mode/state handling, remove obsolete bench modes and misleading version banners, and replace project-owned Techart-specific names while retaining upstream license, copyright and provenance notices.
 - Separate electrical drivers, frame parsing, request dispatch, session lifecycle, optical profiles and diagnostics; retain replay/regression tests for a6000 init, status, shutdown and wake traces.
 - Prioritize the cold-start path: establish safe pin states and protocol receive readiness as early as possible; avoid USB CDC initialization, diagnostics, delays, unnecessary setup and nonessential subsystem initialization before the first valid body request.
 - Explicitly preserve fast reception and handling of cold-init 0x01 and short-wake 0x0B. The generated version header is compile-time-only and must not add runtime startup work.
