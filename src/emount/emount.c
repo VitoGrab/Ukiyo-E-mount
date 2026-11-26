@@ -141,11 +141,9 @@ static void ukiyo_mf_override_status06(void)
 #define EM06_CYCLE        0x1D
 #define EM06_CYCLE_BIT    0x40u
 
-/* The current aperture, 256 x AV + 4096: message 0x05 payload[0..1] (fixed,
- * in the template -- there is no iris) and message 0x28 payload[9..10], which
- * follows it only when the body asks (set_28_aperture). */
-#define EM05_AP_NOW_A     0x06
-#define EM28_AP_NOW       0x0F
+/* Messages 0x28 and 0x35 pl[9..10] report an aperture offset, not
+ * the current aperture. The zero-offset templates remain unchanged.
+ * Based on upstream 51ce0a5 (a7C II parser analysis). */
 
 /* The focal length pair, mm x 10, u16 LE twice: message 0x05 payload[24..27]
  * and messages 0x28 / 0x35 payload[4..7].  Message 0x08 payload[16..17] holds
@@ -297,8 +295,6 @@ volatile uint16_t em_m0a_n;
 volatile uint8_t  em_status05_len = EM_LEN_05;
 volatile uint8_t  em_m08_len;
 volatile uint16_t em_m08_n;
-volatile uint8_t  em_m08_aperture_on;
-static void set_28_aperture(void);
 
 /* The pending instruction, and the query queue.  Both are written from the
  * chip-select interrupt and read from the main loop. */
@@ -1178,15 +1174,8 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 	 * burst of init-class requests that follows a shutter press
 	 * (0x0a 0x0b 0x1b 0x28 0x19 0x19 0x28 0x0b 0x0a), and a body that ever
 	 * drove the channel harder would show up here. */
-	/* MESSAGE 0x08's REQUEST.
-	 *
-	 * Captured whole, because it is sent once per session and carries a
-	 * capability bit nothing else does.  Bit 7 of payload[1] -- frame byte
-	 * 7 -- gates message 0x28's payload[9..10], INVERTED: clear means the
-	 * body wants the field.
-	 *
-	 * The aperture is re-applied on the spot so the decision takes effect
-	 * without waiting for the next thing that happens to set it. */
+	/* MESSAGE 0x08's REQUEST: capture the raw request for diagnostics.
+	 * Payload[1] bit 7 does not control the aperture-offset fields. */
 	if (rx[3] == EM_CLASS_INIT && rx[5] == 0x08u && n >= 8) {
 		uint16_t k;
 
@@ -1199,8 +1188,6 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 			}
 			em_m08_len = (uint8_t)k;
 		}
-		em_m08_aperture_on = ((rx[7] & 0x80u) == 0u);
-		set_28_aperture();
 	}
 
 	/* MESSAGE 0x0A's REQUEST: capture the first, and let every one pick
@@ -2319,17 +2306,6 @@ uint16_t em_defocus_scale(void)
 	       | ((uint16_t)em_msg_06[EM06_DEFOCUS + 1] << 8);
 }
 
-/* Messages 0x28 and 0x35 pl[9..10] carry the current aperture only when the
- * body's 0x08 request asks for it (emount.h); otherwise zero.  Filling it
- * unasked made an a9 II re-meter after every exposure. */
-static void set_28_aperture(void)
-{
-	uint16_t av = (uint16_t)em_msg_05[EM05_AP_NOW_A]
-	              | ((uint16_t)em_msg_05[EM05_AP_NOW_A + 1] << 8);
-
-	put16(em_msg_28, EM28_AP_NOW, em_m08_aperture_on ? av : 0u);
-	put16(em_msg_35, EM28_AP_NOW, em_m08_aperture_on ? av : 0u);
-}
 
 uint8_t em_take_focus_cmd(struct em_focus_cmd *out)
 {

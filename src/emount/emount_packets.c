@@ -15,7 +15,7 @@
  *   EM_APERTURE_MAX   0x08 pl[0..1]    (aperture value, the largest opening)
  *   EM_APERTURE_MIN   0x08 pl[2..3]    (aperture value, the smallest opening)
  *
- * Only what changes at run time (positions, status, events, 0x28 pl[9..10],
+ * Only what changes at run time (positions, status, events,
  * the 0x34 echo) is written by emount.c -- and the focal length, which
  * em_init writes from em_focal_mm10 into 0x05 pl[24..27], 0x08 pl[16..17]
  * (whole mm, BCD), 0x28 pl[4..7] and 0x35 pl[4..7], so that the one word in
@@ -148,10 +148,10 @@ uint8_t em_msg_06[EM06_LEN_MAX] = {
 
 uint8_t em_msg_07[EM_LEN_07] = {
     /* Generated from config/lens_profile.json and config/protocol_identity.json by apply_lens_profile.py */
-    0xf0, 0x2b, 0x00, 0x02, 0x00, 0x07, 0x01, 0x03, 0x08, 0x01, 0x00, 0x07,
+    0xf0, 0x2b, 0x00, 0x02, 0x00, 0x07, 0x01, 0x03, 0x08, 0x01, 0x00, 0x08,
     0x04, 0x10, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x92, 0x86,
     0x5e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0xd2, 0x02, 0x55,
+    0x00, 0x00, 0x00, 0x00, 0xd3, 0x02, 0x55,
 };
 
 /* pl[85] (frame 0x5b) = 0x80, was the Yongnuo 50 DF's 0x04.  An A7 IV reads
@@ -259,6 +259,7 @@ uint8_t em_msg_1B[EM_LEN_1B] = {
 	/* +0x10 */ 0x00, 0x00, 0x55,
 };
 
+/* pl[9..10]: zero aperture offset, independent of 0x08 request. */
 uint8_t em_msg_28[EM_LEN_28] = {
 	/* +0x00 */ 0xf0, 0x00, 0x00, 0x02, 0x00, 0x28, 0x00, 0x07,
 	/* +0x08 */ 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
@@ -274,7 +275,7 @@ uint8_t em_msg_28[EM_LEN_28] = {
  * the same two rows as message 0x28 (msg_0x35.md: the same content, rows split
  * by three bytes).  pl[8] = 01 as Yongnuo and TTArtisan send it (stock ff);
  * the secondary bytes pl[17..19] / pl[26..28] zeroed -- the stock's went with
- * its own rows.  pl[9..10] is written by emount.c, as message 0x28's.
+ * its own rows.  pl[9..10] remains zero, as in message 0x28.
  * pl[0..3] is the subject distance, as message 0x28's: infinity until
  * emount.c writes it (the stock's 42 01 00 7f was another lens's 0.5 m). */
 uint8_t em_msg_35[EM_LEN_35] = {

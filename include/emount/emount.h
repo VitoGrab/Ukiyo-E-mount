@@ -472,25 +472,13 @@ uint16_t em_defocus_scale(void);
 extern volatile uint16_t em_aperture_req;
 
 /* ------------------------------------------------------------------------
- * MESSAGE 0x08's REQUEST -- captured whole, and the capability bit in it.
- *
- * The body sends it exactly once, sixth in the init handshake, in every
- * session ever recorded.  So the first one is the only one, and capturing it
- * is the whole of the observation.
- *
- * Bit 7 of its payload[1] decides whether the lens populates payload[9..10] of
- * messages 0x28 and 0x35.  The bit is inverted: CLEAR means the body wants the
- * field.  A lens latches it when it answers 0x08 and applies it for the rest
- * of the session.
- *
- * Default OFF, which is both the stock's behaviour and the one measured to be
- * correct: filling the field unasked made an a9 II re-meter after every
- * exposure (NOTES.md 92). */
+ * MESSAGE 0x08's REQUEST -- retained raw for diagnostics only.
+ * Payload[1] bit 7 does not control messages 0x28 and 0x35;
+ * their pl[9..10] fields are aperture offsets, not current aperture. */
 #define EM_M08_LEN 24
 extern volatile uint8_t  em_m08[EM_M08_LEN];   /* the raw request, truncated  */
 extern volatile uint8_t  em_m08_len;           /* how much of it was captured */
 extern volatile uint16_t em_m08_n;             /* how many arrived            */
-extern volatile uint8_t  em_m08_aperture_on;   /* the decoded capability bit  */
 
 /* MESSAGE 0x0A's REQUEST, and the message 0x05 length it selects.
  *

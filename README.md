@@ -24,7 +24,7 @@ to other lenses including zoom lenses.
 | 4.6. Body-driven autonomous operation | 0x16 electrical shutdown, short wake at 1.5 Mbaud, supply-loss rearm and optional USB trace | Repeated wake, full init, remount, shooting and EXIF | Completed for USB-powered a6000 prototype (2026-11-25); LED/boot refinements in 4.7 |
 | 4.6.1. Protocol identity / EXIF experiment | One project version generates Sony firmware bytes; retain validated E-mount protocol 1.08 | Compare camera Version screen and ARW/JPG EXIF, retaining MF/wake behavior | Compact version 0.42 maps to 04.002; suffix 04.003 observed in a6000 EXIF; capture/session behaviour remains open in issue #3 |
 | 4.6.2. Powerbank autonomy test | XIAO powered from a powerbank, with no PC/USB data connection | Full init, shooting and repeated 0x0B wake work without USB CDC host | Tested; powerbank auto-off limits standby validation |
-| 4.7. Codebase refactor and fast startup | Consolidate state handling, remove obsolete bench modes, minimize pre-ready startup work | Preserve the powerbank baseline; pins are ready early for 0x01 and 0x0B | In progress (v0.47) |
+| 4.7. Codebase refactor and fast startup | Consolidate state handling, remove obsolete bench modes, minimize pre-ready startup work | Preserve the powerbank baseline; pins are ready early for 0x01 and 0x0B | Refactor validated on a6000 (v0.47); startup optimization ongoing |
 | 4.8. Additional body compatibility | Test a6500 after refactoring; retain a6000 regression suite | Mount, MF, EXIF, sleep/wake and remount pass on both bodies | Planned |
 | 5. Standalone power | Validate XIAO supply from camera rail with regulated/protected power path | Repeated mounts and wake cycles work without USB or backfeeding | Planned |
 | 6. Mechanical integration | Contact PCB and non-destructive mount/adapter packaging | Secure fit, no shorts, optics unaffected | Planned |
@@ -78,13 +78,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.47`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.47` -> `pl[6]=0x04`, `pl[5]=0x07`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
-- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.007`.
+- The current project version is `0.48`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.48` -> `pl[6]=0x04`, `pl[5]=0x08`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.008`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that the generated packet sources and compile-time version header match the JSON configuration.
-- Monitor startup, `h` help and status output use the generated `v0.47` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.48` label; there is no separate version command.
 
 ### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
@@ -194,3 +194,7 @@ testing or third-party license and attribution requirements.
 ### License and provenance
 
 Ukiyo-E-mount firmware is distributed under the [MIT License](LICENSE). The integrated protocol engine contains code derived from Aylwin Wei's MIT-licensed Techart EA9 community firmware. See [upstream provenance](third_party/Techart-UPSTREAM.txt) and [original license](third_party/Techart-LICENSE). The engine is maintained in `src/emount/` and `include/emount/`; the legacy importer has been retired.
+
+### v0.48 protocol correction
+
+Messages `0x28` and `0x35` payload bytes 9–10 are aperture offsets, not current aperture. Keep them zero for the current profile, independent of the `0x08` request. Based on [upstream 51ce0a5](https://github.com/weiziqian/E-mount-impl-on-Techart-EA9/commit/51ce0a5716a148a3ff092fe1ffcd65678bac4371). Current aperture reporting and the `0x1B` response are unchanged. Hardware regression pending.
