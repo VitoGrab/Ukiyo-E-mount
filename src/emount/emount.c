@@ -294,7 +294,7 @@ volatile uint8_t  em_m08[EM_M08_LEN];
 volatile uint8_t  em_m0a[EM_M0A_LEN];
 volatile uint8_t  em_m0a_len;
 volatile uint16_t em_m0a_n;
-volatile uint8_t  em_status05_len = EA9_LEN_05;
+volatile uint8_t  em_status05_len = EM_LEN_05;
 volatile uint8_t  em_m08_len;
 volatile uint16_t em_m08_n;
 volatile uint8_t  em_m08_aperture_on;
@@ -746,7 +746,7 @@ static void em_send_id(uint8_t id)
 			return;
 		}
 		em_msg_10[6] = 0x00u;
-		em_transmit(em_msg_10, EA9_LEN_10);
+		em_transmit(em_msg_10, EM_LEN_10);
 		return;
 	}
 
@@ -1223,7 +1223,7 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 		 * one in force stays. */
 		if (rx[1] >= 11u && rx[6] == 0x00u && rx[7] == 0x00u) {
 		} else if (rx[1] >= 11u && rx[6] == 0xFFu && rx[7] == 0x7Fu) {
-			em_status05_len = EA9_LEN_05;
+			em_status05_len = EM_LEN_05;
 		} else if ((pl13 & 0xFEu) != 0x80u) {
 			em_status05_len = EM05_LEN_LONG;
 		}
@@ -2563,7 +2563,7 @@ void em_pump_status(void)
 		static uint8_t long05[EM05_LEN_LONG];
 		uint8_t i;
 
-		for (i = 0; i < EA9_LEN_05 - 3u; i++) {
+		for (i = 0; i < EM_LEN_05 - 3u; i++) {
 			long05[i] = em_msg_05[i];
 		}
 		for (; i < EM05_LEN_LONG - 3u; i++) {
@@ -2571,7 +2571,7 @@ void em_pump_status(void)
 		}
 		em_transmit(long05, EM05_LEN_LONG);
 	} else {
-		em_transmit(em_msg_05, EA9_LEN_05);
+		em_transmit(em_msg_05, EM_LEN_05);
 	}
 
 	/* THE TAIL.  Message 0x06 is a 43-byte core plus zero or more tail

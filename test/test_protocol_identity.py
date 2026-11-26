@@ -19,7 +19,7 @@ from apply_lens_profile import (  # noqa: E402
 def packet_bytes(source: str, symbol: str) -> list[int]:
     match = re.search(
         r'uint8_t\s+' + re.escape(symbol) +
-        r'\s*\[EA9_LEN_[0-9a-fA-F]+\]\s*=\s*\{(.*?)\};',
+        r'\s*\[EM_LEN_[0-9a-fA-F]+\]\s*=\s*\{(.*?)\};',
         source, flags=re.S,
     )
     if match is None:

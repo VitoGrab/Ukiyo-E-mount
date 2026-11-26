@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Apply config/lens_profile.json to the vendored Techart protocol templates.
+"""Apply config/lens_profile.json to the E-mount protocol templates.
 
-Run after tools/import_techart.py and whenever the selected lens changes.
+Run whenever the selected lens or protocol identity changes.
 The upstream parser, GPIO/UART HAL and capability bitmap are untouched.
 """
 from __future__ import annotations
@@ -59,7 +59,7 @@ def load_profile(path: pathlib.Path) -> dict:
     if not (1.0 <= wide <= reported <= narrow <= 64.0):
         raise ProfileError('Require 1 <= max aperture opening <= now <= min aperture opening <= 64')
     if reported > 9.0:
-        raise ProfileError('Techart EM_F_BCD nameplate table supports up to f/9 for NOW; adapt table before increasing')
+        raise ProfileError('EM_F_BCD nameplate table supports up to f/9 for NOW; adapt table before increasing')
     return p
 
 
@@ -138,7 +138,7 @@ def set_macro(header: str, name: str, value: int, explanation: str) -> str:
 
 def replace_array(text: str, symbol: str, modify) -> str:
     pat = re.compile(r'(uint8_t\s+' + re.escape(symbol) +
-                     r'\s*\[\s*EA9_LEN_[0-9A-Fa-f]+\s*\]\s*=\s*\{)(.*?)(\};)', re.S)
+                     r'\s*\[\s*EM_LEN_[0-9A-Fa-f]+\s*\]\s*=\s*\{)(.*?)(\};)', re.S)
     matches = list(pat.finditer(text))
     if len(matches) != 1:
         raise ProfileError(f'Expected one array {symbol}, found {len(matches)}')
@@ -179,7 +179,7 @@ def apply_to_sources(header: str, packets: str, profile: dict, identity: dict) -
 
     def patch_07(data: list[int]):
         if len(data) != 43 or data[:6] != [0xf0, 0x2b, 0, 2, 0, 7] or data[-1] != 0x55:
-            raise ProfileError('em_msg_07 structure differs from verified Techart template')
+            raise ProfileError('em_msg_07 structure differs from verified protocol template')
         # Message 0x07, absolute offsets = payload indices + 6.
         protocol = identity['emount_protocol_u16']
         data[8], data[9] = protocol & 0xff, protocol >> 8  # pl[2..3], u16 LE
@@ -189,7 +189,7 @@ def apply_to_sources(header: str, packets: str, profile: dict, identity: dict) -
 
     def patch_3f(data: list[int]):
         if len(data) != 74 or data[:6] != [0xf0, 0x4a, 0, 2, 0, 0x3f] or data[-1] != 0x55 or data[6] != 0:
-            raise ProfileError('em_msg_3F structure differs from verified Techart template')
+            raise ProfileError('em_msg_3F structure differs from verified protocol template')
         data[7:71] = list(name.ljust(64, b'\x00'))  # payload[1..64]
 
     packets = replace_array(packets, 'em_msg_07', patch_07)

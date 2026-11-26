@@ -1,17 +1,17 @@
-#ifndef EA9_NO_LOG
-#define EA9_NO_LOG 1
+#ifndef UKIYO_NO_FLASH_LOG
+#define UKIYO_NO_FLASH_LOG 1
 #endif
 #ifndef DIAG_H
 #define DIAG_H
 #include <stdint.h>
 
-/* EA9_NO_LOG -- the release configuration.
+/* UKIYO_NO_FLASH_LOG -- the release configuration.
  *
  * Everything below writes to flash, and flash has a finite number of
  * erase/program cycles.  That is a fair price for a development instrument
  * used over a bench session; it is not a fair price for an adapter that sits
  * in a camera bag for years.  So the release build (`make release`) defines
- * EA9_NO_LOG, which turns this whole interface into inline no-ops and drops
+ * UKIYO_NO_FLASH_LOG, which turns this whole interface into inline no-ops and drops
  * diag.c and trail.c from the build entirely.  The callers keep their calls --
  * no #ifdef anywhere else in the tree -- and the compiler deletes the page
  * buffers they were filling, because nothing reads them any more.
@@ -66,7 +66,7 @@
  * boots land in successive rows and the trail shows it. */
 /* Erases THIS boot's slot only, leaving the previous boot's intact.  Pass the
  * boot index from diag_boot_tally(); returns the noinit boot counter. */
-#ifdef EA9_NO_LOG
+#ifdef UKIYO_NO_FLASH_LOG
 static inline uint32_t diag_begin(uint32_t boot_index)
 {
 	(void)boot_index;
@@ -86,7 +86,7 @@ void     diag_page(uint32_t page, const uint32_t *w, uint32_t words);
  * not say so -- that cost a camera run (NOTES.md §21).  The header
  * dependencies in the Makefile prevent it; this reports it if they ever fail
  * again, because a silent instrument is worse than none. */
-#ifdef EA9_NO_LOG
+#ifdef UKIYO_NO_FLASH_LOG
 static inline uint32_t diag_page_capacity(void) { return 0; }
 static inline uint32_t diag_slot_base(void)     { return 0; }
 #else
@@ -133,7 +133,7 @@ uint32_t diag_slot_base(void);
  * to rebuild so the stamp tracks the image.  Taking it as an argument meant it
  * was expanded in the CALLER, which is not force-rebuilt, so the forced
  * rebuild had no effect at all. */
-#ifdef EA9_NO_LOG
+#ifdef UKIYO_NO_FLASH_LOG
 static inline uint32_t diag_boot_tally(uint32_t rcause)
 {
 	(void)rcause;
@@ -176,7 +176,7 @@ uint32_t diag_boot_tally(uint32_t rcause);
  * Payload: the number of frame-sync edges seen, saturated at 255. */
 #define DIAG_MARK_NOBODY    0xB6u
 
-#ifdef EA9_NO_LOG
+#ifdef UKIYO_NO_FLASH_LOG
 static inline void diag_tally_mark(uint8_t code, uint8_t data)
 {
 	(void)code; (void)data;
@@ -193,7 +193,7 @@ void diag_tally_mark(uint8_t code, uint8_t data);
 #ifndef DIAG_SRC_ID
 #define DIAG_SRC_ID 0
 #endif
-#ifdef EA9_NO_LOG
+#ifdef UKIYO_NO_FLASH_LOG
 static inline uint32_t diag_src_id(void) { return DIAG_SRC_ID; }
 #else
 uint32_t diag_src_id(void);
