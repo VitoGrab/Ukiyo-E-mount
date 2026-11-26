@@ -30,7 +30,8 @@ def load_profile(path: pathlib.Path) -> dict:
         p = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
         raise ProfileError(f'Cannot read profile {path}: {exc}') from exc
-    keys = {'profile_id', 'lens_model', 'sony_lens_id', 'focal_length_mm',
+    keys = {'profile_id', 'lens_model', 'sony_lens_id', 'lens_type', 'focal_length_min_mm',
+            'focal_length_max_mm', 'focal_length_default_mm', 'focal_length_source',
             'aperture_max_f', 'aperture_min_f', 'aperture_now_f'}
     if set(p) != keys:
         raise ProfileError(f'Expected exactly these keys: {sorted(keys)}')
@@ -45,9 +46,17 @@ def load_profile(path: pathlib.Path) -> dict:
     lens_id = p['sony_lens_id']
     if type(lens_id) is not int or not 0 <= lens_id <= 65535:
         raise ProfileError('sony_lens_id must be 0..65535 integer')
-    mm = p['focal_length_mm']
-    if type(mm) is not int or not 1 <= mm <= 500:
-        raise ProfileError('focal_length_mm must be an integer from 1 to 500')
+    if p['lens_type'] != 'prime':
+        raise ProfileError('Only prime lenses are supported; see issue #5')
+    if p['focal_length_source'] != 'fixed':
+        raise ProfileError('Prime lenses require focal_length_source=fixed')
+    focal_keys = ('focal_length_min_mm', 'focal_length_max_mm', 'focal_length_default_mm')
+    for key in focal_keys:
+        mm = p[key]
+        if type(mm) is not int or not 1 <= mm <= 500:
+            raise ProfileError(f'{key} must be an integer from 1 to 500')
+    if len({p[key] for key in focal_keys}) != 1:
+        raise ProfileError('Prime lenses require identical minimum, maximum and default focal lengths')
     try:
         wide = float(p['aperture_max_f'])
         narrow = float(p['aperture_min_f'])
@@ -165,7 +174,7 @@ def replace_array(text: str, symbol: str, modify) -> str:
 def apply_to_sources(header: str, packets: str, profile: dict, identity: dict) -> tuple[str, str]:
     name = profile['lens_model'].encode('ascii')
     lens_id = profile['sony_lens_id']
-    focal_mm10 = profile['focal_length_mm'] * 10
+    focal_mm10 = profile['focal_length_default_mm'] * 10
     aperture_values = {
         'MAX': (profile['aperture_max_f'], 'widest aperture; f-number minimum'),
         'MIN': (profile['aperture_min_f'], 'narrowest aperture; f-number maximum'),
@@ -225,7 +234,7 @@ def main() -> int:
         print('LENS_PROFILE=' + p['profile_id'])
         print('LENS_MODEL=' + p['lens_model'])
         print('SONY_LENS_ID=' + str(p['sony_lens_id']) + ' (experimental; validate EXIF)')
-        print('FOCAL_MM=' + str(p['focal_length_mm']))
+        print('FOCAL_MM=' + str(p['focal_length_default_mm']))
         print('APERTURE_MAX_F=' + str(p['aperture_max_f']))
         print('APERTURE_MIN_F=' + str(p['aperture_min_f']))
         print('APERTURE_NOW_F=' + str(p['aperture_now_f']) + ' (fixed until sensing)')
