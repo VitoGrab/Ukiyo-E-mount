@@ -334,7 +334,7 @@ void status() {
     Serial.println("CAMERA_STATUS_DEFERRED_DURING_HANDSHAKE");
     return;
   }
-  Serial.print("=== CAMERA LINK "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
+  Serial.print("=== PASSIVE CAMERA DIAGNOSTICS "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
   Serial.println(" ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("UPTIME_US_MOD_2^32="); Serial.println(micros());
@@ -358,7 +358,7 @@ void status() {
   Serial.print("CS_LOW_AT_US="); Serial.println(g_low_at_us);
   Serial.print("CS_LOW_LATENCY_US="); Serial.println(g_low_at_us ? static_cast<uint32_t>(g_low_at_us-g_second_edge_us) : 0u);
   Serial.print("CS_RELEASE_AT_US="); Serial.println(g_release_at_us);
-  Serial.println("EMULATOR_RESPONSES=NOT_IMPLEMENTED");
+  Serial.println("EMULATOR_RESPONSES=DISABLED_IN_DIAGNOSTIC_MODE");
 }
 
 void trace() {

@@ -207,7 +207,7 @@ void arm_internal() {
 void log_mode(const char* what) {
   if (!Serial) return;  // Never block camera initialization on USB CDC.
   Serial.print("[t_ms="); Serial.print(millis());
-  Serial.print("] TECHART_MODE="); Serial.println(what);
+  Serial.print("] EMULATOR_MODE="); Serial.println(what);
 }
 #endif
 }  // namespace
@@ -232,23 +232,23 @@ void record_setup_done(uint32_t done_ms) { boot_setup_done_ms = done_ms; }
 
 bool arm() {
 #if !UKIYO_TECHART_VENDOR_PRESENT
-  Serial.println("TECHART_PORT=UNAVAILABLE_RUN_tools/import_techart.py");
+  Serial.println("EMULATOR=PROTOCOL_ENGINE_UNAVAILABLE");
   return false;
 #else
   if (mode == Running || mode == Suspended ||
       mode == WakeWaitBodyTx || mode == WakeWaitCsFall) {
-    Serial.println("TECHART_PORT=SESSION_ACTIVE_OR_SUSPENDED_USE_x_TO_STOP");
+    Serial.println("EMULATOR=SESSION_ACTIVE_OR_SUSPENDED_USE_x_TO_STOP");
     return false;
   }
   if (mode == Armed) {
-    Serial.println("TECHART_MODE=ALREADY_ARMED_AUTO");
+    Serial.println("EMULATOR_MODE=ALREADY_ARMED_AUTO");
     return true;
   }
   ukiyo_bus_abort();
   // Do not reset the supply history just because a monitor command was typed.
   // The next sample reasserts the cached state if LOGIC_VCC is truly present.
   arm_internal();
-  Serial.println("TECHART_MODE=ARMED_WAITING_FOR_LOGIC_VCC_ON_A0");
+  Serial.println("EMULATOR_MODE=ARMED_WAITING_FOR_LOGIC_VCC_ON_A0");
   return true;
 #endif
 }
@@ -260,7 +260,7 @@ void stop() {
   status_leds_all_off();
   automatic_enabled = false;
   mode = Off;
-  Serial.println("TECHART_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z");
+  Serial.println("EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z");
   Serial.println("AUTO_ARM=DISABLED_UNTIL_e_OR_RESET");
 }
 
@@ -421,7 +421,7 @@ void poll() {
 }
 
 void status() {
-  Serial.print("=== TECHART PORT "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
+  Serial.print("=== UKIYO EMULATOR "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
   Serial.println(" ===");
   Serial.print("UPTIME_MS="); Serial.println(millis());
   Serial.print("MODE=");
@@ -441,7 +441,6 @@ void status() {
 #if UKIYO_TECHART_VENDOR_PRESENT
   ukiyo_supply_ok();
   const int adc = ukiyo_supply_adc();
-  Serial.println("TECHART_VENDOR=IMPORTED_MIT");
   Serial.print("LOGIC_VCC_ADC10="); Serial.println(adc);
   Serial.print("LOGIC_VCC_EST_MV="); Serial.println(adc * 6600L / 1023L);
   Serial.print("LOGIC_VCC_DETECTED="); Serial.println(ukiyo_supply_ok() ? "YES" : "NO");
@@ -502,10 +501,8 @@ void status() {
   Serial.print("FAILED_SESSIONS="); Serial.println(failed_sessions);
   Serial.println("OPTICS=COMPILE_TIME_LENS_PROFILE");
   Serial.println("PROFILE_CONFIG=config/lens_profile.json");
-  Serial.println("AF_DECLARATION=UPSTREAM_PROFILE_UNVERIFIED");
 #else
-  Serial.println("TECHART_VENDOR=NOT_IMPORTED");
-  Serial.println("ACTION=RUN_python3_tools/import_techart.py");
+  Serial.println("PROTOCOL_ENGINE=UNAVAILABLE");
 #endif
 }
 

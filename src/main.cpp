@@ -30,11 +30,8 @@ void safe_pins() {
 }
 
 void print_status() {
-  Serial.print("=== UKIYO-E-MOUNT "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
-  Serial.println(" ===");
-  Serial.print("UPTIME_MS="); Serial.println(millis());
-  ukiyoemount::camera_link::status();
-  ukiyoemount::techart::status();
+  if (ukiyoemount::camera_link::active()) ukiyoemount::camera_link::status();
+  else ukiyoemount::techart::status();
 }
 
 void handle_command(const char* cmd) {
@@ -61,11 +58,10 @@ void handle_command(const char* cmd) {
     Serial.println("Commands: help, status, camera listen, camera probe, camera emulate, camera status, camera trace, camera stop");
     Serial.println("camera probe drives D10 only, never UART TX.");
   } else if (!strcmp(cmd, "camera status")) {
-    ukiyoemount::camera_link::status();
-    ukiyoemount::techart::status();
+    print_status();
   } else if (!strcmp(cmd, "camera trace")) {
-    ukiyoemount::camera_link::trace();
-    ukiyoemount::techart::trace();
+    if (ukiyoemount::camera_link::active()) ukiyoemount::camera_link::trace();
+    else ukiyoemount::techart::trace();
   } else if (!strcmp(cmd, "camera trace clear")) {
     ukiyoemount::techart::clear_trace();
   } else if (!strcmp(cmd, "camera trace mark")) {
