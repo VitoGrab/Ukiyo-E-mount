@@ -61,8 +61,23 @@ python3 -m unittest discover -s test -p 'test_*.py'
 pio run -e seeed_xiao
 ```
 
-The Python suite includes a native C loader test when `cc` is available. It covers the full prime catalog, two alternate synthetic lenses, CRC and semantic corruption, fallback and preservation of 0x01. On camera verify MF, focus aids, shooting, EXIF, sleep/wake and remount. The v0.49 runtime milestone passed these existing host and maintainer-reported a6000 hardware checks on 2026-11-27; the new v1 image loader is not yet hardware-validated.
+The Python suite includes a native C loader test when `cc` is available. It covers the full prime catalog, two alternate synthetic lenses, CRC and semantic corruption, fallback and preservation of 0x01. On camera verify MF, focus aids, shooting, EXIF, sleep/wake and remount. The v0.49 runtime milestone passed these existing host and maintainer-reported a6000 hardware checks on 2026-11-27; the v1 image loader and independent profile switching were subsequently verified on a6000 (see below).
 
 ## Remaining work
 
-The Flash region and USB CDC programming are implemented in v0.411; see [Flash layout and programming](PROFILE_FLASH.md). Validate the actual linker/map, NVM fuses, program/readback and bootloader erase behavior; ensure firmware updates preserve the selected profile. Zoom profiles remain unsupported (issue #5).
+The Flash region and USB CDC programming are implemented in v0.411; see [Flash layout and programming](PROFILE_FLASH.md). Verify both linker/map configurations, bootloader erase behavior, interrupted writes and cold-start timing; ensure firmware updates preserve the selected profile. Programming/readback and profile switching have passed on the maintainer's XIAO/a6000. Zoom profiles remain unsupported (issue #5).
+
+## Hardware evidence (2026-11-27)
+
+Maintainer-reported JPEG EXIF results from a Sony a6000 after a fresh firmware upload, independent Hanimex profile upload and return to Helios. No firmware rebuild was required for the profile changes.
+
+| Capture | Lens model | Focal length | Maximum aperture | EXIF FNumber | Focus mode |
+|---|---|---:|---:|---:|---|
+| DSC04860.JPG | HELIOS 44M-4 58mm f2 | 58 mm | f/2 | f/6.3 | Manual |
+| DSC04861.JPG | HANIMEX AUTOMATIC 135mm f2.8 | 135 mm | f/2.8 | f/2.8 | Manual |
+| DSC04862.JPG | HANIMEX AUTOMATIC 135mm f2.8 | 135 mm | f/2.8 | f/22 | Manual |
+| DSC04863.JPG | HELIOS 44M-4 58mm f2 | 58 mm | f/2 | f/2.5 | Manual |
+
+All four report the expected LensSpec, LensInfo, LensModel, Composite LensID, focal length and full-frame lens format. The Hanimex EXIF f/22 demonstrates that the body can record a selected aperture within the advertised range, not that the physical iris was measured or actuated. The first JPEG includes LensFirmwareVersion Ver.04.008 and protocol 1.08; later JPEGs omit those tags and report LensMount2 as Unknown. The reason is unresolved (see issue #3); this evidence does not establish the new firmware version from EXIF alone. No raw files were independently inspected.
+
+**Result:** Independent profile upload and Helios -> Hanimex -> Helios metadata switching passed. Persistence through a firmware upgrade, timing and failure injection are separate tests.
