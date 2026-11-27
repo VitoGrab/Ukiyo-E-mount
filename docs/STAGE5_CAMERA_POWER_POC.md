@@ -1,6 +1,6 @@
 # Stage 5 — camera power proof of concept
 
-Status: planning / measurement only. Baseline v0.411 at `d48da295069a5bd005a6cd30e2d14f7a220f58a7`. No firmware, bootloader, fuse or wiring change has been made on this branch.
+Status: functional direct-power POC PASS on Sony a6000 (maintainer report, 2026-11-27). Baseline v0.411 at `d48da295069a5bd005a6cd30e2d14f7a220f58a7`. The hardware test used the existing firmware, bootloader and fuses; a separate diagnostic firmware commit on this branch was not required for the test. Electrical qualification and final Stage 5 acceptance remain open.
 
 ## Evidence and working hypothesis
 
@@ -33,4 +33,33 @@ Prefer contact 5 for the first protected power POC, subject to measured current 
 
 ## Load characterization observations
 
-Maintainer reported 501 ADC counts (3232 mV estimated) with no additional load and 498 counts (3212 mV estimated) with 1 kOhm. With 470 Ohm the emulator entered Running at 276760 ms and aborted for qualified LOGIC_VCC loss at 276790 ms, then rearmed. This does not identify whether the rail physically fell, the ADC misread, or the body withdrew supply due to a failed session. Do not increase load or disable the electrical gate until independently measured. The current qualification thresholds are 370/310 counts and 3/12 ms. A diagnostic-only change keeps ADC sampling in Off mode and reports the raw sample at an active power-loss abort, without relaxing the output interlock. With USB power, use x to disable emulation before the passive measurement, s to inspect supply state, and measure contacts 5/3 directly; a body may deliberately switch off its rail when no lens responds. No evidence yet establishes safe direct supply or the cause of the 470 Ohm failure. Remove the added load before ordinary operation.
+Maintainer reported 501 ADC counts (3232 mV estimated) with no additional load and 498 counts (3212 mV estimated) with 1 kOhm. With 470 Ohm the emulator entered Running at 276760 ms and aborted for qualified LOGIC_VCC loss at 276790 ms, then rearmed. This does not identify whether the rail physically fell, the ADC misread, or the body withdrew supply due to a failed session. Do not increase load or disable the electrical gate until independently measured. The current qualification thresholds are 370/310 counts and 3/12 ms. A diagnostic-only change keeps ADC sampling in Off mode and reports the raw sample at an active power-loss abort, without relaxing the output interlock. With USB power, use x to disable emulation before the passive measurement, s to inspect supply state, and measure contacts 5/3 directly; a body may deliberately switch off its rail when no lens responds. The maintainer subsequently identified the 470 Ohm failure as a mechanical connection problem; the corrected measurements below supersede that initial observation. Remove the added load before ordinary operation.
+
+## Completed load characterization — 2026-11-27
+
+Measurements used the existing 100k/100k divider and USB-powered XIAO ADC (nominal 3.3 V reference assumption). Currents are calculated from estimated rail voltage and nominal resistor values, not measured directly. No extra load was applied for the direct-power POC.
+
+| Added load | Active ADC | Active estimated V | Active added mA | Sleep ADC | Sleep estimated V | Sleep added mA |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| None | 501 | 3.232 | 0 | 477 | 3.077 | 0 |
+| 1 kOhm | 498 | 3.212 | 3.21 | — | — | — |
+| 470 Ohm | 497 | 3.206 | 6.82 | — | — | — |
+| 330 Ohm | 496 | 3.200 | 9.70 | — | — | — |
+| 220 Ohm | 497 | 3.206 | 14.57 | 473 | 3.051 | 13.87 |
+| 150 Ohm | 496 | 3.200 | 21.33 | 469 | 3.025 | 20.17 |
+| 100 Ohm | 492 | 3.174 | 31.74 | 430 | 2.774 | 27.74 |
+
+At 100 Ohm, sleep remained stable near 2.78 V and the camera woke normally with the short handshake while XIAO was externally powered. The sleep rail droops more than the active rail. The 50 Ohm test was deliberately not performed. These readings do not establish absolute rail accuracy, maximum current, or transient margin.
+
+## Direct camera power — functional POC PASS, 2026-11-27
+
+The maintainer disconnected USB and the camera, removed the load resistor, retained the A0 100k/100k divider and XDETECT resistor, and connected Sony contact 5 directly to XIAO 3V3, with the existing common logic ground and signal connections. The motor rail remained unused. The initial no-LED attempt was traced to a mechanical electrical connection fault; correcting the connection restored operation. USB-powered recovery also worked before the corrected attempt.
+
+With the existing v0.411 firmware and no USB attached, the maintainer reported green and yellow LEDs illuminated, lens recognition, sleep and wake, removal/reinstallation while the camera was off followed by startup, and live lens exchange with the camera on. These are functional observations on the a6000, not quantified timing or endurance measurements. No firmware change was needed to achieve body-powered operation.
+
+### Follow-up qualification
+
+- Measure actual XIAO supply voltage at its 3V3/GND pads under camera-only power in active, sleep and wake states. The present A0 conversion assumes 3.3 V VDD and becomes ratiometric with direct power; it cannot independently measure absolute supply voltage.
+- Characterize current draw, startup transients, cold-start margin, and regulator reverse-feed behavior when suitable equipment is available. Preserve physical USB isolation whenever the direct supply is connected.
+- Consider independent internal ADC reference or scaled VDD measurement and a low-duty-cycle undervoltage warning, initially targeting 2.8 V with hysteresis. Verify ADC configuration and calibration, protect timing and the existing profile-programming interlock, and avoid confusing the existing LED meanings. This is a proposed firmware enhancement, not implemented here.
+- Repeat photo/EXIF, aperture, sleep/wake and power-cycle tests with retained profiles; test production build and other bodies separately. Final hardware protection, mechanical mounting, and production qualification remain open.
