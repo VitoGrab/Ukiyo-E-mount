@@ -36,6 +36,25 @@ def validate_image(image: bytes):
         raise UploadError('Invalid packet sizes')
     return crc
 
+
+def lens_model(image: bytes) -> str:
+    """Decode 0x3F payload[1:65] from the verified binary profile."""
+    validate_image(image)
+    offset = 16
+    for key, length in ORDER:
+        if key == '3f':
+            raw = image[offset + 7:offset + 71]
+            name, separator, padding = raw.partition(b'\0')
+            if not name or not separator or any(padding):
+                raise UploadError('Invalid lens model field')
+            try:
+                return name.decode('ascii')
+            except UnicodeError as exc:
+                raise UploadError('Lens model is not ASCII') from exc
+        offset += length
+    raise UploadError('Profile has no 0x3F frame')
+
+
 class Device:
     def __init__(self, serial, verbose=False):
         self.serial = serial
@@ -164,8 +183,17 @@ def main():
             port.reset_input_buffer()
             try:
                 device.stop()
-                for line in device.info():
+                info = device.info()
+                for line in info:
                     print(line)
+                if args.info:
+                    states = [line for line in info if line.startswith('PROFILE_VALID=')]
+                    if states == ['PROFILE_VALID=1']:
+                        print('PROFILE_LENS_MODEL=' + lens_model(device.read()))
+                    elif states == ['PROFILE_VALID=0']:
+                        print('PROFILE_LENS_MODEL=NONE (embedded fallback on next initialization)')
+                    else:
+                        raise UploadError('Missing or ambiguous PROFILE_VALID response')
                 if data is not None:
                     device.upload(data)
                     print('PROFILE_UPLOAD=PASS (byte-for-byte readback verified)')

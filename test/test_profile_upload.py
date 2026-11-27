@@ -5,7 +5,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from upload_lens_profile import Device, UploadError, validate_image, SIZE, CHUNK
+from upload_lens_profile import Device, UploadError, validate_image, lens_model, SIZE, CHUNK
 
 class FakeSerial:
     def __init__(self, corrupt=False, reject=False):
@@ -52,6 +52,13 @@ class FakeSerial:
 class UploadTests(unittest.TestCase):
     def setUp(self):
         self.image = (ROOT / 'profiles/hanimex-135-f2-8.bin').read_bytes()
+
+    def test_lens_model_from_stored_packet(self):
+        self.assertEqual(lens_model(self.image), 'HANIMEX AUTOMATIC 135mm f2.8')
+        helios = (ROOT / 'profiles/helios-44m-4.bin').read_bytes()
+        self.assertEqual(lens_model(helios), 'HELIOS 44M-4 58mm f2')
+        with self.assertRaises(UploadError):
+            lens_model(self.image[:-1])
 
     def test_success(self):
         peer = FakeSerial()
