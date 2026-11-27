@@ -1,6 +1,6 @@
 # Lens profiles
 
-The firmware and lens profile are independent data formats. Version 0.410 introduces the binary profile loader and generator; persistent Flash storage and upload are subsequent milestones.
+The firmware and lens profile are independent data formats. Version 0.410 introduced the binary profile loader and generator. Version 0.411 reserves a Flash region and reads one profile from it; independent programming remains a subsequent milestone.
 
 ## Generate a profile
 
@@ -65,4 +65,4 @@ The Python suite includes a native C loader test when `cc` is available. It cove
 
 ## Remaining work
 
-Reserve and protect an erase-aligned Flash region, load one selected profile from it before cold handshake, implement independent profile upload and verify firmware updates preserve the profile. No Flash address or upload mechanism has been selected. Zoom profiles remain unsupported (issue #5).
+The read-only Flash region is reserved in v0.411; see [Flash layout](PROFILE_FLASH.md). Verify the actual linker/map, NVM fuses and bootloader erase behavior; implement independent profile upload and ensure firmware updates preserve the selected profile. Zoom profiles remain unsupported (issue #5).

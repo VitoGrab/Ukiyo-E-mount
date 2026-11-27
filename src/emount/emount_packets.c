@@ -152,6 +152,13 @@ uint8_t em_msg_3F[EM_LEN_3F];
 
 static uint8_t staged_profile[UKIYO_PROFILE_SIZE];
 static uint8_t profile_staged;
+#if defined(UKIYO_PROFILE_FLASH) && UKIYO_PROFILE_FLASH
+/* Absolute linker symbols, not objects stored in the profile region. */
+extern const uint8_t __ukiyo_profile_start__[];
+extern const uint8_t __ukiyo_profile_end__[];
+static uint8_t flash_checked;
+static uint8_t flash_loaded;
+#endif
 static const struct ea9_packet profile_frames[] = {
     {0x05, em_msg_05, EM_LEN_05}, {0x07, em_msg_07, EM_LEN_07},
     {0x08, em_msg_08, EM_LEN_08}, {0x1b, em_msg_1B, EM_LEN_1B},
@@ -252,8 +259,28 @@ uint8_t ukiyo_profile_stage(const uint8_t *image, unsigned size)
     return 1;
 }
 
+uint8_t ukiyo_profile_load_flash(void)
+{
+#if defined(UKIYO_PROFILE_FLASH) && UKIYO_PROFILE_FLASH
+    if (flash_checked) return flash_loaded;
+    flash_checked = 1u;
+    /* Explicit staging takes priority. A blank/foreign image fails the magic
+     * check immediately; valid images pay the CRC cost only once per reset. */
+    if (profile_staged) return 0u;
+    uintptr_t start = (uintptr_t)__ukiyo_profile_start__;
+    uintptr_t end = (uintptr_t)__ukiyo_profile_end__;
+    if (end <= start || end - start != UKIYO_PROFILE_FLASH_SIZE ||
+        (start & 255u) != 0u) return 0u;
+    flash_loaded = ukiyo_profile_stage(__ukiyo_profile_start__, UKIYO_PROFILE_SIZE);
+    return flash_loaded;
+#else
+    return 0u;
+#endif
+}
+
 void ukiyo_profile_apply(void)
 {
+    (void)ukiyo_profile_load_flash();
     const uint8_t *p = (profile_staged ? staged_profile : ukiyo_default_profile)
                       + UKIYO_PROFILE_HEADER_SIZE;
     for (unsigned i = 0; i < 7; ++i) {

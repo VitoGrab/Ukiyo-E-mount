@@ -82,13 +82,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.410`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.410` -> `pl[6]=0x04`, `pl[5]=0x0A`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The current project version is `0.411`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.411` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
 - The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.008`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that the reference BIN, fallback header and firmware identity header match their sources.
-- Monitor startup, `h` help and status output use the generated `v0.410` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.411` label; there is no separate version command.
 
 ### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
@@ -209,4 +209,8 @@ The runtime staging milestone (commit `573a316`) passed profile generator verifi
 
 ### v0.410 standalone packet profiles (development)
 
-[profiles/](profiles/) contains a single `profiles.json` catalog and distributable 559-byte binary prime-lens profiles named by profile ID. Regenerate all supported entries with `python3 tools/generate_lens_profile.py`, or select one with `--profile-id`, without editing firmware or rebuilding. Zoom records are retained but not encoded. The engine validates and stages the binary packet image; firmware identity and 0x01 remain firmware-owned. The current build still uses its embedded Helios fallback: persistent Flash loading and USB programming are not implemented yet. See [lens profile format](docs/LENS_PROFILES.md).
+[profiles/](profiles/) contains a single `profiles.json` catalog and distributable 559-byte binary prime-lens profiles named by profile ID. Regenerate all supported entries with `python3 tools/generate_lens_profile.py`, or select one with `--profile-id`, without editing firmware or rebuilding. Zoom records are retained but not encoded. The engine validates and stages the binary packet image; firmware identity and 0x01 remain firmware-owned. The v0.410 milestone used its embedded Helios fallback; see v0.411 below for read-only Flash loading. See [lens profile format](docs/LENS_PROFILES.md).
+
+### v0.411 reserved Flash and read-only profile loading (development)
+
+Both XIAO environments use a Seeed-derived linker script that reserves 8 KiB at `0x3E000..0x3FFFF`. The engine checks the reserved image once before the first full handshake and uses the existing Helios fallback if absent or invalid. The normal firmware upload path has not been changed and may erase this region; no profile programming is supported yet. See [Flash layout](docs/PROFILE_FLASH.md) for the required linker, fuse and upload validation before enabling writes.
