@@ -138,6 +138,38 @@ Reserve an erase-row-aligned region at the end of application Flash for a versio
 
 `python3 tools/prepare_lens_profiles.py --verify-only` remains available for CI/manual validation. Use the XIAO's documented double-reset procedure if automatic bootloader entry fails.
 
+
+The PlatformIO post extra-script extends bootloader-port discovery to a fifteen-second maximum, with a three-second fallback when the original port remains present and no re-enumeration is observed. It also configures BOSSA 1.9 row-local erase with explicit application offset `0x2000`.
+
+#### XIAO LED build modes
+
+- `pio run -e seeed_xiao` builds the debug configuration.
+- `pio run -e seeed_xiao_production` builds the production configuration.
+- Add `-t upload` to either command to flash that exact build. The selected default environment is stored in `platformio.ini` by the build-type task.
+
+Debug mode: User LED is solid while LOGIC_VCC is detected; RX gives a short pulse after the 0x0A handshake completes; TX gives a longer pulse for malformed frames, dropped requests, unknown/incomplete instruction records or UART receive-ring overflow. Normal frame traffic and keepalives do not trigger LEDs. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
+
+- Keep the proven PlatformIO `seeed_xiao` board configuration.
+- Use USB CDC only for diagnostics in early stages. Never put diagnostic
+  printing in time-critical E-mount processing.
+- Use `Serial1` hardware UART at D6/D7; 750 kbaud already passed loopback.
+- Keep E-mount protocol processing independent of hardware GPIO/UART backends.
+- Maintain the integrated E-mount protocol engine independently, retaining upstream attribution.
+- a6000 handshake has nine init exchanges: 01, 07, 0C, 0B, 08, 09, 0D,
+  10, 0A. Some other bodies require additional messages.
+- Treat 0x0C as a real baud-rate transition. Do not acknowledge a speed change
+  until the serial interface can switch to the negotiated rate.
+- Treat 0x16 shutdown, wake and link loss as independent lifecycle events.
+  Power present on A0 does not imply an active camera session; return to passive
+  listening after a confirmed shutdown or disconnection.
+- Frame parser uses declared length, checks the checksum, and ignores padding
+  after the terminator. It must reject truncated frames.
+- No autofocus/motor capabilities should be advertised until implemented.
+- Keep camera-driven state transitions independent of USB monitor commands.
+- Never answer malformed or unsupported messages speculatively; preserve the
+  last validated camera exchanges for offline regression testing.
+- Reserve D4/D5 for I2C and D0/D1 for optional aperture controls.
+
 ### Projects which made this possible
 
 - Techart EA9 E-mount reference firmware (MIT):
