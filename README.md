@@ -17,23 +17,30 @@ to other lenses including zoom lenses.
 
 ### Development stages
 
+Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current baseline: **v0.411**, merged to main and functionally validated on Sony a6000 with external USB power.
+
 | Stage | Deliverable | Exit criterion | Status |
 |---|---|---|---|
 | 0. Board validation | XIAO USB upload, monitoring, 750 kbaud D6/D7 loopback | Tests pass without camera | Completed |
 | 1. Protocol workbench | Frame encoder/parser, checksum, identity fixture, host regression tests | Offline protocol tests pass | Completed |
-| 2. Safe bus bring-up | Electrical validation, body CS capture, clock/baud, safe shutdown | Stable a6000 handshake and no unintended bus drive | Completed on a6000 |
-| 3. Native manual-lens emulation | Handshake, 1.5 Mbaud, native MF responses, focus aids | a6000 forces MF, takes pictures, Focus Magnifier and Peaking operate | Completed on a6000 (v0.4.2) |
-| 4. EXIF verification | Helios 44M-4 profile, 58 mm, f/2 nameplate, configurable reported aperture | ARW reports correct lens identity, focal length, aperture and MF | Completed on a6000 (v0.4.2) |
-| 4.5. Body lifecycle capture | Trace 0x16, sleep/wake, loss of lens rail and remount | Validated short wake, full re-init after removal and runtime capture | Completed on a6000 (2026-11-25) |
-| 4.6. Body-driven autonomous operation | 0x16 electrical shutdown, short wake at 1.5 Mbaud, supply-loss rearm and optional USB trace | Repeated wake, full init, remount, shooting and EXIF | Completed for USB-powered a6000 prototype (2026-11-25); LED/boot refinements in 4.7 |
-| 4.6.1. Protocol identity / EXIF experiment | One project version generates Sony firmware bytes; retain validated E-mount protocol 1.08 | Compare camera Version screen and ARW/JPG EXIF, retaining MF/wake behavior | Compact version 0.42 maps to 04.002; suffix 04.003 observed in a6000 EXIF; capture/session behaviour remains open in issue #3 |
-| 4.6.2. Powerbank autonomy test | XIAO powered from a powerbank, with no PC/USB data connection | Full init, shooting and repeated 0x0B wake work without USB CDC host | Tested; powerbank auto-off limits standby validation |
-| 4.7. Codebase refactor and fast startup | Consolidate state handling, remove obsolete bench modes, minimize pre-ready startup work | Preserve the powerbank baseline; pins are ready early for 0x01 and 0x0B | Refactor validated on a6000 (v0.47); startup optimization ongoing |
-| 4.8. Additional body compatibility | Test a6500 after refactoring; retain a6000 regression suite | Mount, MF, EXIF, sleep/wake and remount pass on both bodies | Planned |
-| 5. Standalone power | Validate XIAO supply from camera rail with regulated/protected power path | Repeated mounts and wake cycles work without USB or backfeeding | Planned |
-| 6. Mechanical integration | Contact PCB and non-destructive mount/adapter packaging | Secure fit, no shorts, optics unaffected | Planned |
+| 2. Safe bus bring-up | Electrical validation, body CS capture, clock/baud, safe shutdown | Stable a6000 handshake and no unintended bus drive in tested setup | Completed on a6000 |
+| 3. Native manual-lens emulation | Handshake, 1.5 Mbaud, native MF responses, focus aids | a6000 forces MF, takes pictures, Focus Magnifier and Peaking operate | Completed on a6000 (v0.42) |
+| 4. EXIF verification | Helios 44M-4, 58 mm, f/2 nameplate and selectable reported aperture | ARW/JPG reports lens identity, focal length, aperture and MF | Completed on a6000 (v0.42) |
+| 4.5. Body lifecycle capture | Trace 0x16, sleep/wake, loss of lens rail and remount | Short wake and full re-init validated | Completed on a6000 |
+| 4.6. Body-driven autonomous operation | Shutdown, short wake at 1.5 Mbaud, supply-loss rearm | Repeated wake, full init, remount, shooting and EXIF | Completed for externally powered prototype (v0.46) |
+| 4.6.1. Protocol identity | Single project version, E-mount protocol 1.08 | Generated wire identity independent of lens profile | Implemented; intermittent MakerNotes remain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) |
+| 4.6.2. Powerbank autonomy | Operation without PC or USB data host | Full init, shooting and wake without monitor | Passed; powerbank auto-off limits long standby test |
+| 4.7. Refactor and startup | Safe early pins, auto-arm, consolidated protocol engine and LED modes | Preserve externally powered a6000 baseline | Refactor passed (v0.47); absolute cold-start timing moves to Stage 5 |
+| 4.8. Protocol correction | Zero aperture-offset fields in 0x28/0x35 | Preserve MF, EXIF and selectable aperture | Completed (v0.48) |
+| 4.9. Runtime prime profiles | Independent runtime packet templates and firmware identity | Select/stage alternative profile without changing protocol engine | Completed (v0.49) |
+| 4.10. Standalone binary profiles | Catalog, 16 prime BINs, shared templates, v1 format and fallback | Independent generated profile images | Implemented (v0.410); camera validation followed in v0.411 |
+| 4.11. Persistent prime profiles | Reserved Flash, USB CDC programming, readback, reset, BOSSA 1.9 retention | Change prime profile without rebuilding; preserve it across changed firmware uploads | Passed on a6000 (v0.411); merged to main |
+| 5. Standalone power | Camera-rail characterization and protected power path | Safe cold boot, repeated mounts and wake without external USB or backfeeding | **Next — ready to begin characterization** |
+| 6. Mechanical integration | Contact assembly, mounting and protected interconnect | Secure fit, no shorts, optics unaffected | Planned; donor-contact concept under evaluation |
 | 7. Aperture sensing (extra) | Analog lever sensor or manual control | Reliable reported aperture values | Future |
 | 8. Extras | I2C sensors, lens position, optional ranging/AF experiments | Separate proof-of-concept tests | Future |
+
+**Parallel compatibility track:** a6500 and additional camera bodies remain untested. Verify mount, MF, EXIF, sleep/wake and remount separately; do not claim general Sony E-mount compatibility yet. Manual zoom support remains [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5). Neither is a prerequisite for beginning a6000 standalone-power characterization.
 
 ### Stage 4.5: characterized body lifecycle (a6000; completed 2026-11-25)
 
@@ -83,14 +90,14 @@ The numbered list below retains the complete long-term acceptance criteria.
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
 - The current project version is `0.411`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.411` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
-- The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.008`.
+- The suffix occupies one byte (0–255). The generated v0.411 identity is expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/prepare_lens_profiles.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
-- `--verify-only` checks that the reference BIN, fallback header and firmware identity header match their sources.
+- `--verify-only` checks that all supported BINs, fallback header and firmware identity header match their sources.
 - Monitor startup, `h` help and status output use the generated `v0.411` label; there is no separate version command.
 
-### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
+### Stages 4.6.2–4.7: powerbank validation and cleanup
 
 **Stage 4.6.2 — powerbank test, before refactoring**
 
@@ -111,22 +118,27 @@ Powerbank testing was performed before Stage 4.7. Standby validation remains lim
 - Explicitly preserve fast reception and handling of cold-init 0x01 and short-wake 0x0B. The generated version header is compile-time-only and must not add runtime startup work.
 - Re-run the complete powerbank test after each startup-path change. Do not remove a bench facility until its regression coverage has been retained elsewhere.
 
-### Future stage — independently programmable lens profiles
+### Stages 4.8–4.11: protocol correction and independently programmable prime profiles
 
-Reserve an erase-row-aligned region at the end of application Flash for a versioned lens-profile image. Keep firmware identity and protocol/session logic in the application; store lens-specific descriptors and static response data separately, with runtime fields patched in RAM. Define a stable binary schema with length, compatibility version and CRC. Validate the profile before use and retain a safe fallback for missing or invalid data. Provide independent profile generation and programming tools; verify linker boundaries, bootloader/EEPROM reservations, and that firmware uploads preserve the profile (and vice versa). Test interrupted writes and startup latency. Exact partition size and address are TBD after inspecting the actual linker map and upload erase behavior.
+The protocol correction in v0.48, runtime templates in v0.49, standalone BIN format in v0.410, and persistent USB-programmable profiles in v0.411 are implemented. The reserved region is 8 KiB at 0x3E000–0x3FFFF; the current format is a 559-byte v1 image with CRC32, validated before application, with embedded Helios fallback. See [lens profiles](docs/LENS_PROFILES.md) and [Flash programming and hardware evidence](docs/PROFILE_FLASH.md).
 
-**Stage 4.8 — additional body compatibility**
+The maintainer confirmed native MF and EXIF on Helios/Hanimex, independent Pentacon programming and automatic reset/re-arm, Rubinar fixed f/5.6 behavior, and retention of Hanimex through a changed application upload using BOSSA 1.9 without full erase. The tested baseline was integrated at commit `28547ce`. The subsequent host-tool/task cleanup did not change firmware protocol or Flash programming logic.
 
-- Test a6500 after refactoring, retaining a6000 as the regression baseline.
-- Verify mount, MF, EXIF, sleep/wake and remount on both bodies.
+### Stage 5 — camera-rail power
 
-**Stage 5 — camera-rail power**
+**Entry decision:** ready to start characterization on the a6000, not approved for direct camera-rail connection or a camera-powered release. Externally powered functionality is established. The absolute time from camera rail rise to first valid response, including the XIAO bootloader, has not yet been measured. Profile validation/copy occurs before the bus handshake in `em_init()`, so include a valid stored profile in cold-start measurements. Do not assume USB-independent operation means camera-rail operation has passed.
 
-- Only after the powerbank and startup-refactor stages pass, validate the XIAO supply from the camera rail with a regulated/protected power path.
-- Verify rail direction, regulator backfeed, clock/flash operating limits, peak current, brownout/reset and safe transitions with/without USB before connecting the final power path.
-- Do not connect Sony contact 5 directly to XIAO 3V3 or contact 2 to the XIAO without a regulator and protection review.
+| Substage | Work | Acceptance / evidence |
+|---|---|---|
+| 5A. Baseline regression | Freeze v0.411; check prepared artifacts, host suite and both firmware builds; repeat selected a6000 lifecycle tests | Record results and keep working recovery path; resolve relevant failures before powered integration |
+| 5B. Rail characterization | Measure contact 5 (logic supply) and contact 2 (lens power), voltage ranges, rise/fall timing and available-current evidence; characterize XIAO load separately using a current-limited bench supply | Candidate rail and power budget supported by measurements/specifications; no assumption that logic rail can supply MCU |
+| 5C. Cold-start timing | Measure rail rise to first body request, safe GPIO readiness, first valid response and completed handshake; test fallback and stored profile, USB host absent | Establish actual timing margin; isolate bootloader, supply gate and profile overhead if necessary |
+| 5D. Protected supply design | Choose regulator/rail path based on results; check reverse current, USB coexistence, ground, brownout/reset and GPIO backfeed | Bench-validated protection, no unintended sourcing or unsafe voltage/current; retain USB programming/recovery |
+| 5E. Camera-powered prototype | Only after 5B–5D electrical checks, test standalone operation with camera, repeated cold mounts, off/on, sleep/wake, remount and shooting with saved profiles | Repeatable handshake and correct EXIF without external power/USB; no observed brownout, backfeeding or unsafe heating |
 
-### Technical design decisions
+Use the [hardware documentation](hardware/README.md) and [wiring reference](docs/WIRING.md) as starting points, not as a final power schematic. Review the [XIAO SAMD21 manufacturer documentation](https://wiki.seeedstudio.com/Seeeduino-XIAO/) and schematic and SAMD21 electrical limits for the actual board before selecting the power path. Do not connect Sony contact 5 directly to XIAO 3V3 or contact 2 to XIAO without the regulator/protection review. Do not load an uncharacterized camera rail to determine a destructive current limit.
+
+**Remaining regression, not prerequisites for starting characterization:** production-environment hardware acceptance, complete host regression of the current tooling, interrupted profile writes, cross-body compatibility, intermittent firmware-version MakerNotes and zoom support. Cold-start margin, electrical protection and any failures affecting safe power operation are Stage 5 release gates. No new firmware version is assigned until a new code milestone exists.
 
 ### VS Code development tasks
 
@@ -148,6 +160,8 @@ The PlatformIO post extra-script extends bootloader-port discovery to a fifteen-
 - Add `-t upload` to either command to flash that exact build. The selected default environment is stored in `platformio.ini` by the build-type task.
 
 Debug mode: User LED is solid while LOGIC_VCC is detected; RX gives a short pulse after the 0x0A handshake completes; TX gives a longer pulse for malformed frames, dropped requests, unknown/incomplete instruction records or UART receive-ring overflow. Normal frame traffic and keepalives do not trigger LEDs. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
+
+### Technical design decisions
 
 - Keep the proven PlatformIO `seeed_xiao` board configuration.
 - Use USB CDC only for diagnostics in early stages. Never put diagnostic
