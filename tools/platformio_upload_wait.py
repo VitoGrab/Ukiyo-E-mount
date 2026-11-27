@@ -1,4 +1,4 @@
-# Extend PlatformIO's SAM-BA bootloader-port discovery window for the XIAO.
+# Extend XIAO SAM-BA port discovery and avoid a full application erase.
 #
 # Loaded as a post extra_script: PlatformIO has already installed its
 # WaitForNewSerialPort method, but the upload action has not run yet.
@@ -76,5 +76,15 @@ def wait_for_new_serial_port(env, before):
 
     return new_port
 
+
+# BOSSA's D2xNvmFlash auto-erase normally erases only rows being written
+# when no explicit --erase is requested. The standard PlatformIO SAM-BA
+# flags include --erase, which also destroys our reserved profile region.
+# Keep the original write/verify/reset/USB flags and port-discovery action.
+if env.subst("$UPLOAD_PROTOCOL") == "sam-ba":
+    flags = list(env["UPLOADERFLAGS"])
+    filtered = [flag for flag in flags if flag not in ("--erase", "-e")]
+    env.Replace(UPLOADERFLAGS=filtered)
+    print("UKIYO_BOSSA_FULL_ERASE=DISABLED")
 
 env.AddMethod(wait_for_new_serial_port, "WaitForNewSerialPort")

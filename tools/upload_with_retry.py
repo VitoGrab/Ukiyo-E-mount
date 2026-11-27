@@ -70,7 +70,9 @@ def restore_profile(device, image, *, fresh=False):
     else:
         if valid and device.read() == image:
             print("PROFILE_RESTORE=ALREADY_PRESENT", flush=True)
+            print("PROFILE_FLASH_RETAINED=PASS", flush=True)
         else:
+            print("PROFILE_FLASH_RETAINED=FAIL; restoring recovery image", flush=True)
             device.upload(image)
             print("PROFILE_RESTORE=PASS (byte-for-byte verified)", flush=True)
         if not profile_valid(device) or device.read() != image:
