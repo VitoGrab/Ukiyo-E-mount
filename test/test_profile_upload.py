@@ -21,7 +21,7 @@ class FakeSerial:
         self.commands.append(command)
         parts = command.split()
         if command == 'x':
-            self.replies.append('EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z')
+            self.replies.extend(('EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z', 'CAMERA_NOT_ACTIVE'))
         elif command == 'profile info':
             self.replies.extend(('PROFILE_EEPROM=7', 'PROFILE_VALID=0', 'PROFILE_INFO_END'))
         elif command == 'profile begin':
@@ -62,6 +62,12 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(peer.stored, self.image)
         self.assertEqual(device.read(), self.image)
         self.assertEqual(len(self.image), SIZE)
+
+    def test_unknown_command_reports_old_firmware(self):
+        peer = FakeSerial()
+        peer.replies.append('UNKNOWN_COMMAND (type help)')
+        with self.assertRaisesRegex(UploadError, 'does not recognize'):
+            Device(peer).expect('PROFILE_INFO_END')
 
     def test_invalid_image_before_transfer(self):
         peer = FakeSerial()

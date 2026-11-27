@@ -37,10 +37,29 @@ def validate_image(image: bytes):
     return crc
 
 class Device:
-    def __init__(self, serial):
+    def __init__(self, serial, verbose=False):
         self.serial = serial
+        self.verbose = verbose
+        self.recent = []
+
+    def receive(self):
+        raw = self.serial.readline()
+        line = raw.decode('ascii', errors='replace').strip()
+        if raw:
+            self.recent.append(line)
+            self.recent = self.recent[-12:]
+            if self.verbose:
+                print(f'RX: {raw!r}', file=sys.stderr, flush=True)
+        if line.startswith('UNKNOWN_COMMAND'):
+            raise UploadError('Firmware does not recognize the command; flash the current branch build')
+        return line
+
+    def timeout(self, expected):
+        return UploadError(f'Timed out waiting for {expected}; recent RX: {self.recent!r}')
 
     def send(self, line):
+        if self.verbose:
+            print(f'TX: {line}', file=sys.stderr, flush=True)
         data = (line + '\n').encode('ascii')
         if self.serial.write(data) != len(data):
             raise UploadError('Incomplete serial write')
@@ -49,30 +68,37 @@ class Device:
     def expect(self, prefix, timeout=4):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            line = self.serial.readline().decode('ascii', errors='replace').strip()
+            line = self.receive()
             if line.startswith('PROFILE_ERROR='):
                 raise UploadError(line)
             if line.startswith(prefix):
                 return line
-        raise UploadError(f'Timed out waiting for {prefix}')
+        raise self.timeout(prefix)
 
     def stop(self):
         self.send('x')
         self.expect('EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z')
+        # Wait for camera_link::stop() as well, not just emulator::stop().
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            line = self.receive()
+            if line in ('CAMERA_NOT_ACTIVE', 'CAMERA=STOPPED_ALL_GPIO_INPUT'):
+                return
+        raise self.timeout('camera stop completion')
 
     def info(self):
         self.send('profile info')
         lines = []
         deadline = time.monotonic() + 4
         while time.monotonic() < deadline:
-            line = self.serial.readline().decode('ascii', errors='replace').strip()
+            line = self.receive()
             if line.startswith('PROFILE_ERROR='):
                 raise UploadError(line + ' ' + ' '.join(lines))
             if line == 'PROFILE_INFO_END':
                 return lines
             if line.startswith('PROFILE_'):
                 lines.append(line)
-        raise UploadError('Timed out waiting for profile info')
+        raise self.timeout('profile info')
 
     def read(self):
         result = bytearray()
@@ -112,6 +138,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--info', action='store_true', help='Display NVM layout and profile state')
     mode.add_argument('--read', type=pathlib.Path, metavar='BIN', help='Save a valid stored profile')
+    parser.add_argument('--verbose', action='store_true', help='Show raw USB CDC command/response traffic')
     parser.add_argument('--port', required=True, help='Application USB CDC port (not bootloader)')
     parser.add_argument('--detached', action='store_true',
                         help='Confirm the camera is physically disconnected')
@@ -131,7 +158,7 @@ def main():
         except ImportError as exc:
             raise UploadError('pyserial is required (available in the PlatformIO Python environment)') from exc
         with serial.Serial(args.port, 115200, timeout=0.25, write_timeout=3) as port:
-            device = Device(port)
+            device = Device(port, verbose=args.verbose)
             # CDC opening is not a 1200-baud bootloader touch.
             time.sleep(0.3)
             port.reset_input_buffer()
