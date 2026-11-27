@@ -383,8 +383,6 @@ extern volatile uint16_t em_events_sent;
  */
 extern volatile uint16_t em_stop_n;  /* how many Stop records have arrived */
 
-/* Generated fallback focal length in tenths of a millimetre. */
-#define EM_FOCAL_MM10 580u /* Ukiyo lens profile */
 
 /* THE DEFOCUS SCALE: how many protocol position units one defocus unit is
  * worth.  Reported in message 0x06 payload[13..14], and used by everything
@@ -397,11 +395,6 @@ extern volatile uint16_t em_stop_n;  /* how many Stop records have arrived */
 /* The defocus scale as currently advertised, read back from the frame. */
 uint16_t em_defocus_scale(void);
 
-/* Generated fallback aperture values: 4096 + 512 * log2(f-number).
- * Runtime profile application updates the corresponding packet fields. */
-#define EM_APERTURE_MAX  0x1200u /* widest aperture; f-number minimum */
-#define EM_APERTURE_MIN  0x1800u /* narrowest aperture; f-number maximum */
-#define EM_APERTURE_NOW  0x1200u /* reported current aperture */
 
 /* The aperture the body last commanded on message 0x1B, and how many of those
  * frames have arrived (em_focus_n).  Recorded rather than obeyed: this device

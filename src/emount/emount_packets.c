@@ -1,50 +1,6 @@
-/* emount_packets.c -- the reply frames this lens sends, one template per
- * message.
- *
- * Fixed protocol templates and generated fallback values live here.
- * ukiyo_profile_apply() replaces lens-specific fields before each full init:
- *
- *   EM_APERTURE_NOW   0x05 pl[0..3], 0x1B pl[0..3]
- *   EM_APERTURE_MAX   0x05 pl[44], pl[46], pl[51]  (as a descriptor byte)
- *   EM_APERTURE_MIN   0x05 pl[52]                  (as a descriptor byte)
- *   EM_SLOT_A         0x05 pl[32..37], 0x28 pl[11..16]
- *   EM_SLOT_B_TYPE0   0x05 pl[38..43], 0x28 pl[17..22], 0x35 pl[20..25]
- *   EM_DEFOCUS_SCALE  0x06 pl[13..14]
- *   EM_APERTURE_MAX   0x08 pl[20]      (f-number, BCD; pl[21] = 0, a prime)
- *   EM_APERTURE_MAX   0x08 pl[0..1]    (aperture value, the largest opening)
- *   EM_APERTURE_MIN   0x08 pl[2..3]    (aperture value, the smallest opening)
- *
- * Only what changes at run time (positions, status, events,
- * the 0x34 echo) is written by emount.c -- and the focal length, which
- * ukiyo_profile_apply() writes into 0x05 pl[24..27], 0x08 pl[16..17],
- * 0x28 pl[4..7] and 0x35 pl[4..7]. Message 0x0A has no template: the
- * reply is the body's request, echoed (em_send_id).
- *
- * Messages 0x32, 0x4C and 0x5A from the stock table are gone: none is in the
- * 0x01 bitmap (0x4C and 0x5A lie beyond it), so no body asks for them.
- *
- * First lifted from the stock LM-EA9 1.8.0 image by tools/gen_packets.py and
- * maintained by hand since.  Fixed values changed from that table:
- *
- *   0x0C pl[0]        01, switching to 1.5 Mbaud
- *   0x06 pl[5]        10, as Yongnuo 50 DF writes it
- *   0x06 pl[15..19]   1b 06 06 c6 00, as Yongnuo 50 DF (FUN_08018f94)
- *   0x06 pl[26..29]   6c 02 00 00 (pl[26..27] = 620, meaning unknown)
- *   0x05 pl[28..29]   minimum focus distance, written once at start-up
- *                     (em_set_min_focus)
- *   0x05 pl[95]       11, as Sony's zooms (EM05_PL95)
- *   0x07 pl[0]        01, native device class -- on an a9 II this enables
- *                     video AF (stills AF then runs as Scans)
- *   0x07 pl[2..3]    E-mount protocol 0x0108 (1.08), a6000-tested
- *   0x07 pl[5]        firmware suffix from project version (0x02 for h0.42)
- *   0x07 pl[6]        firmware major 0x04 for h0.42, confirmed on a6000
- *   0x07 pl[9..10]    lens ID 50531 (0xC563), third-party block
- *   0x07 pl[19..22]   zero, as Yongnuo 50 DF: an A7 IV turns this pair into
- *                     the operands of focus record 0x1E (msg_0x07.md)
- *   0x08 pl[0..200]   the Yongnuo 50 mm DF payload as it sends it (template
- *                     0x0801a95c plus FUN_0801747c's edits); pl[13] = e1
- *                     declares the 117-byte 0x05 and a full-frame image
- *                     circle (msg_0x08.md) */
+/* Engine-owned frames and live packet buffers. Lens-specific templates are
+ * loaded from a versioned binary profile before full initialization.
+ * Original templates derived from the Techart implementation; see third_party. */
 #include "emount_packets.h"
 #include "emount.h"
 #include "lens_profile.h"
@@ -116,24 +72,7 @@ uint8_t em_msg_01[EM_LEN_01] = {
  * SEL2870 send it; the stock sent 0. */
 #define EM05_PL95 0x11u
 
-uint8_t em_msg_05[EM_LEN_05] = {
-	/* +0x00 */ 0xf0, 0x69, 0x00, 0x01, 0x64, 0x05, EM_LO(EM_APERTURE_NOW), EM_HI(EM_APERTURE_NOW),
-	/* +0x08 */ EM_LO(EM_APERTURE_NOW), EM_HI(EM_APERTURE_NOW), 0x00, 0x00, 0x10, 0x00, 0x07,
-	/* +0x0f */ UKIYO_MF_05_FOCUS_RANGES,
-	/* +0x17 */ 0x00,
-	/* +0x18 */ 0x00, 0x00, 0x00, 0x07, 0x80, 0xff, 0x00, 0x00,
-	/* +0x20 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x26 */ EM_SLOT_A,
-	/* +0x2c */ EM_SLOT_B_TYPE0,
-	/* +0x32 */ EM_AV_DESC(EM_APERTURE_MAX), 0x00, EM_AV_DESC(EM_APERTURE_MAX), 0x00, 0xa0, 0x00,
-	/* +0x38 */ 0x00, EM_AV_DESC(EM_APERTURE_MAX), EM_AV_DESC(EM_APERTURE_MIN), 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x40 */ 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-	/* +0x48 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x50 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x58 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x60 */ 0x00, 0x00, 0x00, 0x00, 0x00, EM05_PL95, 0x36, 0x06,
-	/* +0x68 */ 0x55,
-};
+uint8_t em_msg_05[EM_LEN_05];
 
 /* Sized for the longest form: event and query-answer blocks extend the frame
  * past its 48-byte core (emount.c, em_pump_status). */
@@ -146,49 +85,13 @@ uint8_t em_msg_06[EM06_LEN_MAX] = {
 	/* +0x28 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x6e, 0x02, 0x55,
 };
 
-uint8_t em_msg_07[EM_LEN_07] = {
-    /* Generated from config/lens_profile.json and config/protocol_identity.json by apply_lens_profile.py */
-    0xf0, 0x2b, 0x00, 0x02, 0x00, 0x07, 0x01, 0x03, 0x08, 0x01, 0x00, 0x09,
-    0x04, 0x10, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x92, 0x86,
-    0x5e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0xd4, 0x02, 0x55,
-};
+uint8_t em_msg_07[EM_LEN_07];
 
 /* pl[85] (frame 0x5b) = 0x80, was the Yongnuo 50 DF's 0x04.  An A7 IV reads
  * bits 0..4 through five getters, honoured only when 0x07 declares protocol
  * version 0x0108 or later (this one does), and tests bit 7 in five AF
  * functions (sony-a7m4/NOTES.md, "How the body reads 0x08"). */
-uint8_t em_msg_08[EM_LEN_08] = {
-	/* +0x00 */ 0xf0, 0xd2, 0x00, 0x02, 0x00, 0x08,
-	            EM_LO(EM_APERTURE_MAX), EM_HI(EM_APERTURE_MAX),
-	/* +0x08 */ EM_LO(EM_APERTURE_MIN), EM_HI(EM_APERTURE_MIN), 0x00, 0x00, 0x00, UKIYO_MF_08_PL7, 0x00, UKIYO_MF_08_PL9,
-	/* +0x10 */ 0x01, 0x00, 0x12, 0xe1, 0x01, 0x03,
-	            0x00, 0x00,
-	/* +0x18 */ 0x00, 0x00, EM_F_BCD(EM_APERTURE_MAX), 0x00, 0x00, 0x00, 0x18, 0x00,
-	/* +0x20 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00,
-	/* +0x28 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x43,
-	/* +0x30 */ 0x00, 0xe0, 0xff, 0x84, 0xa4, 0x00, 0x00, 0x08,
-	/* +0x38 */ 0x32, 0x25, 0x40, 0x2f, 0x00, 0x00, 0x00, 0x00,
-	/* +0x40 */ 0x00, 0x00, 0x00, 0x43, 0x25, 0x04, 0x32, 0x00,
-	/* +0x48 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf3, 0xf3,
-	/* +0x50 */ 0x07, 0xfb, 0xfb, 0x00, 0x04, 0x02, 0x04, 0x04,
-	/* +0x58 */ 0x20, 0x46, 0x00, UKIYO_MF_08_PL85, 0x01, 0x00, 0x00, 0x00,
-	/* +0x60 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x68 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x70 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x78 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x80 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x88 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x90 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x98 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0xa0 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0xa8 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0xb0 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0xb8 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0xc0 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0xc8 */ 0x00, 0x0b, 0xae, 0x00, 0x01, 0x00, 0x01, 0xbd,
-	/* +0xd0 */ 0x05, 0x55,
-};
+uint8_t em_msg_08[EM_LEN_08];
 
 // Original EA9 sends:
 // uint8_t em_msg_08[EM_LEN_08] = {
@@ -253,23 +156,10 @@ uint8_t em_msg_19[EM_LEN_19] = {
 	/* +0x08 */ 0x00, 0x55,
 };
 
-uint8_t em_msg_1B[EM_LEN_1B] = {
-	/* +0x00 */ 0xf0, 0x00, 0x00, 0x02, 0x00, 0x1b, EM_LO(EM_APERTURE_NOW), EM_HI(EM_APERTURE_NOW),
-	/* +0x08 */ EM_LO(EM_APERTURE_NOW), EM_HI(EM_APERTURE_NOW), 0x00, 0x00, 0x00, 0x0a, 0x0a, 0x01,
-	/* +0x10 */ 0x00, 0x00, 0x55,
-};
+uint8_t em_msg_1B[EM_LEN_1B];
 
 /* pl[9..10]: zero aperture offset, independent of 0x08 request. */
-uint8_t em_msg_28[EM_LEN_28] = {
-	/* +0x00 */ 0xf0, 0x00, 0x00, 0x02, 0x00, 0x28, 0x00, 0x07,
-	/* +0x08 */ 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-	/* +0x10 */ 0x00,
-	/* +0x11 */ EM_SLOT_A,
-	/* +0x17 */ EM_SLOT_B_TYPE0,
-	/* +0x1d */ 0x16, 0x00, 0x0e,
-	/* +0x20 */ 0x00, 0x56, 0x00, 0x00, 0x16, 0x50, 0x00, 0x00,
-	/* +0x28 */ 0x00, 0x00, 0x00, 0x55,
-};
+uint8_t em_msg_28[EM_LEN_28];
 
 /* The stock's unadvertised 0x35 template, with this lens's focal length and
  * the same two rows as message 0x28 (msg_0x35.md: the same content, rows split
@@ -278,16 +168,7 @@ uint8_t em_msg_28[EM_LEN_28] = {
  * its own rows.  pl[9..10] remains zero, as in message 0x28.
  * pl[0..3] is the subject distance, as message 0x28's: infinity until
  * emount.c writes it (the stock's 42 01 00 7f was another lens's 0.5 m). */
-uint8_t em_msg_35[EM_LEN_35] = {
-	/* +0x00 */ 0xf0, 0x30, 0x00, 0x02, 0x00, 0x35, 0x00, 0x07,
-	/* +0x08 */ 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-	/* +0x10 */ 0x00,
-	/* +0x11 */ EM_SLOT_A,
-	/* +0x17 */ 0x00, 0x00, 0x00,
-	/* +0x1a */ EM_SLOT_B_TYPE0,
-	/* +0x20 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	/* +0x28 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x55,
-};
+uint8_t em_msg_35[EM_LEN_35];
 
 uint8_t em_msg_34[EM_LEN_34] = {
 	/* +0x00 */ 0xf0, 0x20, 0x00, 0x02, 0x00, 0x34, 0x00, 0x00,
@@ -308,103 +189,130 @@ uint8_t em_msg_3D[EM_LEN_3D] = {
 	/* +0x40 */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x88, 0x00, 0x55,
 };
 
-uint8_t em_msg_3F[EM_LEN_3F] = {
-    /* Generated from config/lens_profile.json by apply_lens_profile.py */
-    0xf0, 0x4a, 0x00, 0x02, 0x00, 0x3f, 0x00, 0x48, 0x45, 0x4c, 0x49, 0x4f,
-    0x53, 0x20, 0x34, 0x34, 0x4d, 0x2d, 0x34, 0x20, 0x35, 0x38, 0x6d, 0x6d,
-    0x20, 0x66, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa4,
-    0x05, 0x55,
+uint8_t em_msg_3F[EM_LEN_3F];
+
+/* Binary profile v1: a fixed sequence of seven complete packet templates. */
+#include "default_lens_profile.h"
+#include "../ukiyo-e-mount/version.h"
+
+static uint8_t staged_profile[UKIYO_PROFILE_SIZE];
+static uint8_t profile_staged;
+static const struct ea9_packet profile_frames[] = {
+    {0x05, em_msg_05, EM_LEN_05}, {0x07, em_msg_07, EM_LEN_07},
+    {0x08, em_msg_08, EM_LEN_08}, {0x1b, em_msg_1B, EM_LEN_1B},
+    {0x28, em_msg_28, EM_LEN_28}, {0x35, em_msg_35, EM_LEN_35},
+    {0x3f, em_msg_3F, EM_LEN_3F}
 };
 
-static ukiyo_lens_profile staged_profile;
-static uint8_t profile_staged;
-
-static void profile_put16(uint8_t *frame, unsigned offset, uint16_t value)
+static uint16_t profile_u16(const uint8_t *p)
 {
-    frame[offset] = EM_LO(value);
-    frame[offset + 1] = EM_HI(value);
+    return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
 }
 
-static uint8_t profile_bcd2(uint16_t n)
+static uint32_t profile_u32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint32_t profile_crc32(const uint8_t *p, unsigned n)
+{
+    uint32_t crc = 0xffffffffu;
+    while (n--) {
+        crc ^= *p++;
+        for (unsigned bit = 0; bit < 8; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1u) ? 0xedb88320u : 0u);
+    }
+    return crc ^ 0xffffffffu;
+}
+
+static uint16_t profile_sum(const uint8_t *p, unsigned n)
+{
+    uint16_t sum = 0;
+    for (unsigned i = 1; i < n - 3; ++i) sum += p[i];
+    return sum;
+}
+
+static uint8_t profile_bcd2(unsigned n)
 {
     return (uint8_t)(((n / 10u % 10u) << 4) | (n % 10u));
 }
 
-static void profile_checksum(uint8_t *frame, unsigned length)
+uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
 {
-    uint16_t sum = 0;
-    unsigned i;
-    for (i = 1; i < length - 3; ++i) sum += frame[i];
-    profile_put16(frame, length - 3, sum);
+    unsigned offset = UKIYO_PROFILE_HEADER_SIZE;
+    const uint8_t *f[7];
+    if (!image || size != UKIYO_PROFILE_SIZE ||
+        memcmp(image, "UKLP", 4) || profile_u16(image + 4) != 1u ||
+        profile_u16(image + 6) != size || profile_u32(image + 12) != 0u ||
+        profile_crc32(image + offset, size - offset) != profile_u32(image + 8))
+        return 0;
+    for (unsigned i = 0; i < 7; ++i) {
+        const struct ea9_packet *entry = &profile_frames[i];
+        unsigned n = entry->len;
+        const uint8_t *p = image + offset;
+        if (offset + n > size || p[0] != 0xf0 || p[5] != entry->id ||
+            profile_u16(p + 1) != n || p[3] != (i == 0 ? 1u : 2u) ||
+            p[n - 1] != 0x55 || profile_u16(p + n - 3) != profile_sum(p, n))
+            return 0;
+        f[i] = p;
+        offset += n;
+    }
+    if (offset != size) return 0;
+    const uint8_t *status = f[0], *identity = f[1], *spec = f[2],
+                  *iris = f[3], *capture = f[4], *capture35 = f[5], *name = f[6];
+    unsigned focal = profile_u16(status + 30);
+    unsigned max = profile_u16(spec + 6), min = profile_u16(spec + 8);
+    unsigned now = profile_u16(status + 6);
+    if (focal < 10u || focal > 5000u || focal % 10u ||
+        profile_u16(status + 32) != focal ||
+        profile_u16(capture + 10) != focal || profile_u16(capture + 12) != focal ||
+        profile_u16(capture35 + 10) != focal || profile_u16(capture35 + 12) != focal ||
+        spec[22] != profile_bcd2(focal / 1000u) || spec[23] != profile_bcd2(focal / 10u) ||
+        spec[24] || spec[25] || spec[27] || capture[15] || capture[16] ||
+        capture35[15] || capture35[16] ||
+        max < 4096u || max > now || now > 5719u || now > min || min > 7168u ||
+        profile_u16(status + 8) != now || profile_u16(iris + 6) != now ||
+        profile_u16(iris + 8) != now ||
+        status[50] != EM_AV_DESC(max) || status[52] != EM_AV_DESC(max) ||
+        status[57] != EM_AV_DESC(max) || status[58] != EM_AV_DESC(min) ||
+        spec[26] != EM_F_BCD(max) ||
+        identity[6] != 1u || identity[8] || identity[9] || identity[11] || identity[12] ||
+        spec[13] != UKIYO_MF_08_PL7 || spec[15] != UKIYO_MF_08_PL9 ||
+        spec[19] != 0xe1 || spec[91] != UKIYO_MF_08_PL85 ||
+        name[6] || !name[7] || name[70]) return 0;
+    uint8_t ended = 0;
+    for (unsigned i = 7; i < 71; ++i) {
+        if (!name[i]) ended = 1;
+        else if (ended || name[i] > 127u) return 0;
+    }
+    return 1;
 }
 
-uint8_t ukiyo_profile_stage(const ukiyo_lens_profile *p)
+uint8_t ukiyo_profile_stage(const uint8_t *image, unsigned size)
 {
-    unsigned i;
-    if (!p || p->focal_mm < 1u || p->focal_mm > 500u ||
-        p->aperture_max_av < 4096u || p->aperture_now_av > 5719u ||
-        p->aperture_max_av > p->aperture_now_av ||
-        p->aperture_now_av > p->aperture_min_av ||
-        p->aperture_min_av > 7168u || !p->model[0]) return 0;
-    for (i = 0; i < sizeof(p->model) && p->model[i]; ++i) {
-        if ((uint8_t)p->model[i] > 127u) return 0;
-    }
-    if (i == sizeof(p->model)) return 0;
-    staged_profile = *p;
-    memset(staged_profile.model + i, 0, sizeof(p->model) - i);
+    if (!ukiyo_profile_validate(image, size)) return 0;
+    memcpy(staged_profile, image, UKIYO_PROFILE_SIZE);
     profile_staged = 1;
     return 1;
 }
 
 void ukiyo_profile_apply(void)
 {
-    uint16_t mm10;
-    if (!profile_staged) {
-        /* The existing generated templates are the built-in fallback.
-         * Capture their identity once, before modifying any packet. */
-        ukiyo_lens_profile p = {
-            EM_FOCAL_MM10 / 10u,
-            (uint16_t)(em_msg_07[15] | ((uint16_t)em_msg_07[16] << 8)),
-            EM_APERTURE_MAX, EM_APERTURE_MIN, EM_APERTURE_NOW, {0}
-        };
-        memcpy(p.model, em_msg_3F + 7, sizeof(p.model));
-        if (!ukiyo_profile_stage(&p)) return;
+    const uint8_t *p = (profile_staged ? staged_profile : ukiyo_default_profile)
+                      + UKIYO_PROFILE_HEADER_SIZE;
+    for (unsigned i = 0; i < 7; ++i) {
+        memcpy(profile_frames[i].frame, p, profile_frames[i].len);
+        p += profile_frames[i].len;
     }
-    const ukiyo_lens_profile *p = &staged_profile;
-    mm10 = (uint16_t)(p->focal_mm * 10u);
-
-    /* Runtime focal values: status, nameplate and capture metadata. */
-    profile_put16(em_msg_05, 30, mm10);
-    profile_put16(em_msg_05, 32, mm10);
-    profile_put16(em_msg_28, 10, mm10);
-    profile_put16(em_msg_28, 12, mm10);
-    profile_put16(em_msg_35, 10, mm10);
-    profile_put16(em_msg_35, 12, mm10);
-    em_msg_08[22] = profile_bcd2(p->focal_mm / 100u);
-    em_msg_08[23] = profile_bcd2(p->focal_mm);
-    em_msg_08[24] = em_msg_08[25] = 0; /* prime */
-
-    /* Preserve the existing fixed aperture behavior, not iris actuation. */
-    profile_put16(em_msg_05, 6, p->aperture_now_av);
-    profile_put16(em_msg_05, 8, p->aperture_now_av);
-    profile_put16(em_msg_1B, 6, p->aperture_now_av);
-    profile_put16(em_msg_1B, 8, p->aperture_now_av);
-    em_msg_05[50] = em_msg_05[52] = em_msg_05[57] =
-        EM_AV_DESC(p->aperture_max_av);
-    em_msg_05[58] = EM_AV_DESC(p->aperture_min_av);
-    profile_put16(em_msg_08, 6, p->aperture_max_av);
-    profile_put16(em_msg_08, 8, p->aperture_min_av);
-    em_msg_08[26] = EM_F_BCD(p->aperture_max_av);
-    em_msg_08[27] = 0; /* prime */
-
-    profile_put16(em_msg_07, 15, p->lens_id);
-    memcpy(em_msg_3F + 7, p->model, sizeof(p->model));
-    profile_checksum(em_msg_07, EM_LEN_07);
-    profile_checksum(em_msg_3F, EM_LEN_3F);
-    /* Other frames are stamped with fresh checksums by the sender. */
+    /* These fields belong to the executing firmware, never the profile. */
+    em_msg_07[8] = EM_LO(UKIYO_PROTOCOL_U16);
+    em_msg_07[9] = EM_HI(UKIYO_PROTOCOL_U16);
+    em_msg_07[11] = UKIYO_FIRMWARE_MINOR;
+    em_msg_07[12] = UKIYO_FIRMWARE_MAJOR;
+    uint16_t sum = profile_sum(em_msg_07, EM_LEN_07);
+    em_msg_07[EM_LEN_07 - 3] = EM_LO(sum);
+    em_msg_07[EM_LEN_07 - 2] = EM_HI(sum);
 }
 
 const struct ea9_packet ea9_packets[EA9_PACKET_COUNT] = {

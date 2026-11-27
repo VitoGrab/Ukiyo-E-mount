@@ -6,3 +6,6 @@
 *.patch
 *.zip
 *.pyc
+
+# Distributable lens profiles are source-controlled.
+!profiles/*.bin
