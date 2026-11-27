@@ -2,19 +2,22 @@
 import pathlib
 import sys
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from upload_lens_profile import Device, UploadError, validate_image, lens_model, SIZE, CHUNK
+from upload_lens_profile import Device, UploadError, validate_image, lens_model, wait_until_armed, main, SIZE, CHUNK
 
 class FakeSerial:
-    def __init__(self, corrupt=False, reject=False):
+    def __init__(self, corrupt=False, reject=False, armed=True):
         self.incoming = bytearray()
         self.stored = b''
         self.replies = []
         self.commands = []
         self.corrupt = corrupt
         self.reject = reject
+        self.armed = armed
 
     def write(self, data):
         command = data.decode('ascii').strip()
@@ -24,6 +27,13 @@ class FakeSerial:
             self.replies.extend(('EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z', 'CAMERA_NOT_ACTIVE'))
         elif command == 'profile info':
             self.replies.extend(('PROFILE_EEPROM=7', 'PROFILE_VALID=0', 'PROFILE_INFO_END'))
+        elif command == 'profile reset':
+            self.replies.append('PROFILE_RESET_ACCEPTED')
+        elif command == 's':
+            self.replies.extend(('MODE=ARMED', 'AUTO_ARM=ENABLED') if self.armed else
+                                ('MODE=OFF', 'AUTO_ARM=DISABLED'))
+        elif command == 'profile abort':
+            self.replies.append('PROFILE_ABORTED')
         elif command == 'profile begin':
             self.incoming.clear()
             self.replies.append('PROFILE_READY')
@@ -42,6 +52,15 @@ class FakeSerial:
         else:
             raise AssertionError(command)
         return len(data)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def reset_input_buffer(self):
+        self.replies.clear()
 
     def flush(self):
         pass
@@ -69,6 +88,38 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(peer.stored, self.image)
         self.assertEqual(device.read(), self.image)
         self.assertEqual(len(self.image), SIZE)
+
+    def test_reset_after_verified_upload(self):
+        peer, rebooted = FakeSerial(), FakeSerial()
+        serial = SimpleNamespace(Serial=lambda *a, **kw: next(connections))
+        connections = iter((peer, rebooted))
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--detached',
+                str(ROOT / 'profiles/hanimex-135-f2-8.bin')]
+        with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.time.sleep'):
+            self.assertEqual(main(), 0)
+        self.assertEqual(peer.commands[-1], 'profile reset')
+        self.assertTrue(peer.commands[-2].startswith('profile read '))
+        self.assertEqual(rebooted.commands, ['s'])
+
+    def test_failed_readback_never_resets(self):
+        peer = FakeSerial(corrupt=True)
+        serial = SimpleNamespace(Serial=lambda *a, **kw: peer)
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--detached',
+                str(ROOT / 'profiles/hanimex-135-f2-8.bin')]
+        with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.time.sleep'):
+            self.assertEqual(main(), 1)
+        self.assertNotIn('profile reset', peer.commands)
+
+    def test_info_does_not_reset(self):
+        peer = FakeSerial()
+        serial = SimpleNamespace(Serial=lambda *a, **kw: peer)
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--detached', '--info']
+        with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.time.sleep'):
+            self.assertEqual(main(), 0)
+        self.assertEqual(peer.commands, ['x', 'profile info'])
 
     def test_unknown_command_reports_old_firmware(self):
         peer = FakeSerial()

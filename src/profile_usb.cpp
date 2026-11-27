@@ -207,7 +207,20 @@ bool handle(const char* cmd) {
     }
     const char* reason = layout_error();
     if (reason) { error(reason); return true; }
-    if (!strcmp(cmd, "profile begin")) {
+    if (!strcmp(cmd, "profile reset")) {
+        if (receiving || !stable_idle() ||
+            !ukiyo_profile_validate(__ukiyo_profile_start__, UKIYO_PROFILE_SIZE)) {
+            error("RESET_REQUIRES_IDLE_VALID_PROFILE");
+            return true;
+        }
+        // A normal Cortex-M system reset, not a 1200-baud bootloader touch.
+        // Allow the USB IN acknowledgement to reach the host before reset.
+        Serial.println("PROFILE_RESET_ACCEPTED");
+        Serial.flush();
+        delay(150);
+        NVIC_SystemReset();
+        return true;
+    } else if (!strcmp(cmd, "profile begin")) {
         cancel();
         if (!stable_idle()) { error("STOP_AND_DISCONNECT_CAMERA"); return true; }
         receiving = true;

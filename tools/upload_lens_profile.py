@@ -151,6 +151,36 @@ class Device:
         if actual != image:
             raise UploadError('Flash readback differs from input')
 
+    def reset(self):
+        self.send('profile reset')
+        self.expect('PROFILE_RESET_ACCEPTED')
+
+
+def wait_until_armed(serial_module, port, verbose=False, timeout=20):
+    """Verify normal application startup without issuing x or e."""
+    deadline = time.monotonic() + timeout
+    last_error = 'application CDC not yet available'
+    # The firmware sends its ACK before resetting. Give it time to disconnect.
+    time.sleep(1.0)
+    while time.monotonic() < deadline:
+        try:
+            with serial_module.Serial(port, 115200, timeout=0.25,
+                                      write_timeout=3, exclusive=True) as connection:
+                time.sleep(0.3)
+                connection.reset_input_buffer()
+                device = Device(connection, verbose=verbose)
+                device.send('s')
+                mode = device.expect('MODE=', timeout=2)
+                auto_arm = device.expect('AUTO_ARM=', timeout=2)
+                if mode != 'MODE=ARMED' or auto_arm != 'AUTO_ARM=ENABLED':
+                    raise UploadError(f'Unexpected post-reset state: {mode}, {auto_arm}')
+                return
+        except (OSError, UploadError) as exc:
+            last_error = str(exc)
+            time.sleep(0.5)
+    raise UploadError(f'Profile written, but application restart not confirmed on {port}: {last_error}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('profile', type=pathlib.Path, nargs='?', help='BIN to upload')
@@ -168,6 +198,7 @@ def main():
         parser.error('Physically disconnect the camera and specify --detached')
     if args.read and args.read.exists():
         parser.error('Readback destination already exists')
+    reset_requested = False
     try:
         data = args.profile.read_bytes() if args.profile else None
         if data is not None:
@@ -176,7 +207,7 @@ def main():
             import serial
         except ImportError as exc:
             raise UploadError('pyserial is required (available in the PlatformIO Python environment)') from exc
-        with serial.Serial(args.port, 115200, timeout=0.25, write_timeout=3) as port:
+        with serial.Serial(args.port, 115200, timeout=0.25, write_timeout=3, exclusive=True) as port:
             device = Device(port, verbose=args.verbose)
             # CDC opening is not a 1200-baud bootloader touch.
             time.sleep(0.3)
@@ -196,7 +227,11 @@ def main():
                         raise UploadError('Missing or ambiguous PROFILE_VALID response')
                 if data is not None:
                     device.upload(data)
-                    print('PROFILE_UPLOAD=PASS (byte-for-byte readback verified)')
+                    print('PROFILE_UPLOAD=PASS (byte-for-byte readback verified)', flush=True)
+                    print('PROFILE_LENS_MODEL=' + lens_model(data), flush=True)
+                    reset_requested = True
+                    device.reset()
+                    print('PROFILE_RESET=ACCEPTED', flush=True)
                 elif args.read:
                     image = device.read()
                     validate_image(image)
@@ -205,15 +240,23 @@ def main():
                     print(f'PROFILE_READ={args.read}')
             except (OSError, UploadError, KeyboardInterrupt):
                 # Abort an unfinished RAM transfer, not a completed Flash write.
-                try:
-                    device.send('profile abort')
-                except Exception:
-                    pass
+                if not reset_requested:
+                    try:
+                        device.send('profile abort')
+                    except Exception:
+                        pass
                 raise
-        print('CAMERA_EMULATION=OFF; reset or power-cycle XIAO before reconnecting camera')
+        if reset_requested:
+            wait_until_armed(serial, args.port, verbose=args.verbose)
+            print('PROFILE_RESET=PASS')
+            print('CAMERA_EMULATION=ARMED')
+        else:
+            print('CAMERA_EMULATION=OFF; reset or power-cycle XIAO before reconnecting camera')
         return 0
     except (OSError, UploadError, KeyboardInterrupt) as exc:
         print(f'PROFILE_UPLOAD_ERROR={exc}', file=sys.stderr)
+        if reset_requested:
+            print('Profile write was verified; reset confirmation failed. Do not repeat the write automatically.', file=sys.stderr)
         print('Do not reconnect the camera until the device has been reset and checked.', file=sys.stderr)
         return 1
 
