@@ -107,21 +107,18 @@ def load_profile(path: pathlib.Path = CONFIG, profile_id: str = DEFAULT_PROFILE_
 
 
 def parse_project_version(value: str) -> tuple[int, int]:
-    """Decode compact project notation into Sony's two firmware-version bytes.
+    """Map project 0.MINOR.PATCH to Sony's two firmware-version bytes.
 
-    Examples: 0.42 -> major 0x04, suffix 2; 0.50 -> major 0x05, suffix 0.
-    The first digit after the decimal point is the Sony major byte; the
-    remaining zero-to-three digits are the decimal suffix byte (0..255).
-    A major milestone without a suffix (0.5) encodes suffix zero.
+    Examples: 0.4.11 -> (4, 11); 0.5.0 -> (5, 0).
+    Project major is reserved at zero; minor and patch each fit one byte.
     ExifTool renders these bytes as Ver.%.2x.%.3d.
     """
-    match = re.fullmatch(r'0\.([1-9])([0-9]{0,3})', value) if isinstance(value, str) else None
+    match = re.fullmatch(r'0\.([1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})', value) if isinstance(value, str) else None
     if not match:
-        raise ProfileError('project_version must use compact 0.MP notation (e.g. 0.42)')
-    major = int(match.group(1), 10)
-    minor = int(match.group(2) or '0', 10)
-    if minor > 255:
-        raise ProfileError('project_version suffix must be 000..255 (one byte)')
+        raise ProfileError('project_version must use 0.MINOR.PATCH notation (e.g. 0.5.0)')
+    major, minor = map(int, match.groups())
+    if major > 255 or minor > 255:
+        raise ProfileError('Sony firmware version components must fit one byte (0..255)')
     return major, minor
 
 

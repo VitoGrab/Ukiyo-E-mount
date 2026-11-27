@@ -78,4 +78,4 @@ The maintainer confirmed body-only operation with the IDLE0 sleep optimization b
 
 ## Core firmware closure decision
 
-The maintainer chose to merge the functional Stage 5 prototype as v0.5, without an undervoltage LED warning or deeper sleep implementation. Production mode keeps software-controlled LEDs disabled. The next firmware milestone is manual zoom support, followed by systematic cross-body compatibility testing. Mechanical integration proceeds in parallel using separately purchased SELP1650 service contact assemblies rather than a donor lens. Outstanding electrical and production qualification items remain explicitly open.
+The maintainer chose to merge the functional Stage 5 prototype as v0.5.0, without an undervoltage LED warning or deeper sleep implementation. Production mode keeps software-controlled LEDs disabled. The next firmware milestone is manual zoom support, followed by systematic cross-body compatibility testing. Mechanical integration proceeds in parallel using separately purchased SELP1650 service contact assemblies rather than a donor lens. Outstanding electrical and production qualification items remain explicitly open.

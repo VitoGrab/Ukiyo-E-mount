@@ -1,4 +1,4 @@
-"""Host-side compact version identity and packet checksum regression checks."""
+"""Host-side semantic version identity and packet checksum regression checks."""
 from __future__ import annotations
 
 import json
@@ -38,12 +38,12 @@ class ProtocolIdentityTests(unittest.TestCase):
         self.assertEqual(len(data), SIZE)
         self.assertEqual(struct.unpack_from('<I', data, 8)[0], zlib.crc32(data[16:]))
 
-    def test_compact_project_version_encoding(self) -> None:
-        self.assertEqual(parse_project_version("0.42"), (0x04, 2))
-        self.assertEqual(parse_project_version("0.50"), (0x05, 0))
-        self.assertEqual(parse_project_version("0.5"), (0x05, 0))
-        self.assertEqual(parse_project_version("0.410"), (0x04, 10))
-        self.assertEqual(parse_project_version("0.4255"), (0x04, 255))
+    def test_project_version_encoding(self) -> None:
+        self.assertEqual(parse_project_version("0.4.2"), (0x04, 2))
+        self.assertEqual(parse_project_version("0.4.11"), (0x04, 11))
+        self.assertEqual(parse_project_version("0.5.0"), (0x05, 0))
+        self.assertEqual(parse_project_version("0.4.255"), (0x04, 255))
+        self.assertEqual(parse_project_version("0.10.0"), (10, 0))
 
     def test_generated_version_header(self) -> None:
         expected = render_version_header(self.identity)
@@ -60,17 +60,17 @@ class ProtocolIdentityTests(unittest.TestCase):
 
     def test_profile_independent_of_firmware_version(self):
         before = build_profile(self.profile)
-        self.identity['project_version'] = '0.4255'
+        self.identity['project_version'] = '0.4.255'
         self.assertEqual(before, build_profile(self.profile))
 
     def test_invalid_project_versions(self) -> None:
-        for value in ("0.0", "0.4.2", "4.02", "0.02", "0.4256", "0.4999", "1.42"):
+        for value in ("0.0", "0.42", "0.5", "0.51", "4.02", "0.04.2", "0.4.02", "0.4.256", "0.256.0", "1.4.2"):
             with self.subTest(value=value):
                 with self.assertRaises(ProfileError):
                     parse_project_version(value)
 
     def test_invalid_identity_keys(self) -> None:
-        identity = {"project_version": "0.42", "lens_firmware_version": "04.002",
+        identity = {"project_version": "0.4.2", "lens_firmware_version": "04.002",
                     "emount_protocol_version": "1.08"}
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "invalid.json"
@@ -79,7 +79,7 @@ class ProtocolIdentityTests(unittest.TestCase):
                 load_identity(path)
 
     def test_invalid_protocol_version(self) -> None:
-        identity = {"project_version": "0.42", "emount_protocol_version": "1.8"}
+        identity = {"project_version": "0.4.2", "emount_protocol_version": "1.8"}
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "invalid.json"
             path.write_text(json.dumps(identity), encoding="utf-8")
