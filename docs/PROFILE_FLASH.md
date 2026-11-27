@@ -1,6 +1,6 @@
 # Persistent profile Flash layout
 
-Status: v0.411 development. Independent profile programming and switching have passed on XIAO SAMD21 and Sony a6000. The maintainer also confirmed byte-for-byte native Flash retention during firmware upload without BOSSA full erase (commit `741c387`). The subsequent changed-firmware upload failed verification with BOSSA 1.7; the project now selects BOSSA 1.9 with an explicit application offset. Changed-image retention remains to be verified.
+Status: v0.411 development. Independent profile programming and switching have passed on XIAO SAMD21 and Sony a6000. The maintainer also confirmed byte-for-byte native Flash retention during firmware upload without BOSSA full erase (commit `741c387`). The subsequent changed-firmware upload failed verification with BOSSA 1.7; the project now selects BOSSA 1.9 with an explicit application offset. Changed-image upload and profile retention subsequently passed on the maintainer's XIAO.
 
 ## Address map (SAMD21G18A)
 
@@ -32,7 +32,7 @@ The VS Code task `Ukiyo: Upload Lens Profile` presents the supported prime profi
 
 The tool requires pyserial; use the PlatformIO Python environment if it is unavailable. It sends `x` to disable auto-arm, then checks NVM information. The device refuses profile commands if either camera mode is active or A0 detects voltage. Before programming it requires 20 consecutive low A0 samples and checks geometry, absolute linker bounds, EEPROM fuse and region lock. The fuse must indicate no EEPROM reservation; it never changes fuses or unlocks regions. A0 is a voltage interlock, not proof of physical detachment.
 
-The entire image is received in RAM as sequential 24-byte hex chunks, then validated before erasing anything. Only the first three rows of the reserved region are erased. The old header is erased first; page zero is programmed last. Interrupted writes may destroy the old profile but an incomplete image should fail validation and select the embedded fallback on reset. The firmware reads back and validates the programmed bytes; the host independently reads back all 559 bytes and compares them with the source. A failed or ambiguous commit is not automatically retried. Identical images skip the erase/write cycle. After successful host readback the uploader sends `profile reset`. The firmware checks that the bus is idle, the camera supply is absent, and Flash contains a valid profile, then acknowledges and calls CMSIS `NVIC_SystemReset()` after a short USB flush/delay. The host reopens the same application CDC port and checks `MODE=ARMED` and `AUTO_ARM=ENABLED` using the read-only status command. No profile write is retried if reset confirmation fails. `--info` and `--read` do not reset the MCU and still leave emulation OFF; reset/power-cycle before reconnecting after these read-only commands. The automatic reset path requires the updated firmware and awaits hardware regression.
+The entire image is received in RAM as sequential 24-byte hex chunks, then validated before erasing anything. Only the first three rows of the reserved region are erased. The old header is erased first; page zero is programmed last. Interrupted writes may destroy the old profile but an incomplete image should fail validation and select the embedded fallback on reset. The firmware reads back and validates the programmed bytes; the host independently reads back all 559 bytes and compares them with the source. A failed or ambiguous commit is not automatically retried. Identical images skip the erase/write cycle. After successful host readback the uploader sends `profile reset`. The firmware checks that the bus is idle, the camera supply is absent, and Flash contains a valid profile, then acknowledges and calls CMSIS `NVIC_SystemReset()` after a short USB flush/delay. The host reopens the same application CDC port and checks `MODE=ARMED` and `AUTO_ARM=ENABLED` using the read-only status command. No profile write is retried if reset confirmation fails. `--info` and `--read` do not reset the MCU and still leave emulation OFF; reset/power-cycle before reconnecting after these read-only commands. The automatic reset path requires the updated firmware and passed hardware regression on XIAO/a6000.
 
 The commands `profile info`, `profile begin`, `profile data <offset-hex> <hex-bytes>`, `profile commit`, `profile read <offset-hex>` and `profile abort` and `profile reset` use the existing USB monitor. Incomplete transfers time out after 10 seconds of inactivity or cancel on a different monitor command/disconnect. No binary protocol, additional GUI or bootloader modification is required.
 
@@ -40,7 +40,7 @@ The commands `profile info`, `profile begin`, `profile data <offset-hex> <hex-by
 
 - Verify the exact installed Seeed framework and PlatformIO linker invocation, ELF load ranges, map symbols, and final BIN size on both environments.
 - Retain the existing fuse/geometry/lock interlocks for every programming attempt; do not change fuses. See the measured values below.
-- Regress the simplified firmware upload workflow in both build environments and whenever the BOSSA/PlatformIO package or bootloader changes. Identical-image native retention passed on BOSSA 1.7, but changed-image verification failed. Validate the new 1.9 package, a changed firmware image and profile retention before release.
+- Regress the simplified firmware upload workflow in both build environments and whenever the BOSSA/PlatformIO package or bootloader changes. Identical-image native retention passed on BOSSA 1.7, but changed-image verification failed. The BOSSA 1.9 changed-image upload and Hanimex profile retention have now passed in the standard environment; production-environment and future toolchain regression remain open.
 - Verify malformed and interrupted-write cases and measure cold handshake latency on a6000. Erased-to-valid programming and two-lens switching have been demonstrated.
 
 References: [Microchip SAM D21 memory architecture](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/memory-architecture/), [SAMD21 NVMCTRL](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/nvmctrl/), [PlatformIO XIAO board definition](https://github.com/platformio/platform-atmelsam/blob/develop/boards/seeed_xiao.json).
@@ -87,7 +87,29 @@ The wrapper compared the post-upload image byte-for-byte against the pre-upload 
 
 The subsequent v0.411 firmware with software reset compiled to 41900 bytes (655 pages, previously 652) but BOSSA 1.7.0 (`tool-bossac@1.10700.190624`) failed checksum verification. The installed Atmel SAM platform is 9.0.0. In the [Arduino BOSSA legacy NvmFlash implementation](https://github.com/arduino/BOSSA/blob/arduino/src/NvmFlash.cpp), `eraseAuto(bool)` is a no-op; the accelerated buffer-write path likewise lacks a preceding row erase. Identical-image retention is therefore not sufficient evidence of changed-image programming.
 
-The [Atmel SAM 9.0.0 package manifest](https://github.com/platformio/platform-atmelsam/blob/v9.0.0/platform.json) explicitly supports `tool-bossac` in the 1.10900 series. The project now selects `platformio/tool-bossac@~1.10900.0` rather than the default 1.7 release. The post script explicitly sets `--offset 0x2000` (BOSSA 1.9 defaults to zero); never run a 1.9 upload without this offset on this board. The application limit and linker remain unchanged. The installed 1.9 package and changed-image upload have not yet been validated on the target. If the failed upload left the application unable to boot, enter the existing bootloader using the documented double-reset procedure and retry the normal task. Do not erase the entire chip.
+The [Atmel SAM 9.0.0 package manifest](https://github.com/platformio/platform-atmelsam/blob/v9.0.0/platform.json) explicitly supports `tool-bossac` in the 1.10900 series. The project now selects `platformio/tool-bossac@~1.10900.0` rather than the default 1.7 release. The post script explicitly sets `--offset 0x2000` (BOSSA 1.9 defaults to zero); never run a 1.9 upload without this offset on this board. The application limit and linker remain unchanged. The maintainer confirmed successful changed-image upload and profile retention on the target (see below). If the failed upload left the application unable to boot, enter the existing bootloader using the documented double-reset procedure and retry the normal task. Do not erase the entire chip.
+
+### BOSSA 1.9 and automatic reset hardware acceptance
+
+Maintainer-reported results on 2026-11-27, with firmware/tooling at commit `862451d`:
+
+- Changed application image: 41900 bytes, 655 pages; BOSSA write completed in 0.996 s, verification in 0.463 s, PlatformIO upload in 6.477 s; `UPLOAD_RESULT=SUCCESS`.
+- Post-update `--info`: `PROFILE_VALID=1`, `PROFILE_LENS_MODEL=HANIMEX AUTOMATIC 135mm f2.8`. No profile restoration was performed.
+- VS Code `Ukiyo: Upload Lens Profile` selected `pentacon-200-4.bin`:
+
+```text
+PROFILE_VALID=1
+PROFILE_UPLOAD=PASS (byte-for-byte readback verified)
+PROFILE_LENS_MODEL=PENTACON 200mm f4
+PROFILE_RESET=ACCEPTED
+PROFILE_RESET=PASS
+CAMERA_EMULATION=ARMED
+```
+
+- A subsequent independent `--info` returned `PROFILE_VALID=1` and `PROFILE_LENS_MODEL=PENTACON 200mm f4`. The maintainer confirmed the new profile on the camera.
+- Rubinar 500 mm f/5.6 fixed-aperture profile was also checked on the camera; aperture remained f/5.6 and could not be changed.
+
+The implemented prime-profile workflow is accepted on the tested XIAO/a6000 configuration. The exact installed BOSSA 1.9 package revision, production build hardware regression, full host test suite, cold-start timing, interrupted-write tests and other camera models remain outside this reported acceptance. Zoom profiles remain unsupported (issue #5).
 
 ### Current workflow
 

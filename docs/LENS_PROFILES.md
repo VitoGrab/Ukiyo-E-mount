@@ -1,6 +1,6 @@
 # Lens profiles
 
-The firmware and lens profile are independent data formats. Version 0.410 introduced the binary profile loader and generator. Version 0.411 reserves a Flash region, reads one profile from it, and adds guarded USB CDC programming and native firmware-update retention. The maintainer has confirmed the basic workflow on XIAO/a6000.
+The firmware and lens profile are independent data formats. Version 0.410 introduced the binary profile loader and generator. Version 0.411 reserves a Flash region, reads one profile from it, and adds guarded USB CDC programming and native firmware-update retention. The maintainer has confirmed the implemented prime-profile workflow on XIAO/a6000, including automatic reset and retention during changed firmware upload.
 
 ## Generate a profile
 
@@ -65,7 +65,7 @@ The Python suite includes a native C loader test when `cc` is available. It cove
 
 ## Remaining work
 
-The Flash region and USB CDC programming are implemented in v0.411; see [Flash layout and programming](PROFILE_FLASH.md). Verify both linker/map configurations, bootloader erase behavior, interrupted writes and cold-start timing; regress native row-local firmware uploads in both environments. The original full-erase upload invalidated the stored profile; omitting explicit full erase was verified to retain it byte-for-byte. Programming/readback and profile switching have passed on the maintainer's XIAO/a6000. Zoom profiles remain unsupported (issue #5).
+The Flash region and USB CDC programming are implemented in v0.411; see [Flash layout and programming](PROFILE_FLASH.md). Verify both linker/map configurations, bootloader erase behavior, interrupted writes and cold-start timing; regress native row-local firmware uploads in both environments. The original full-erase upload invalidated the stored profile; BOSSA 1.9 with explicit application offset and row-local erase successfully programmed a changed firmware image while retaining the Hanimex profile. Programming/readback and profile switching have passed on the maintainer's XIAO/a6000. Zoom profiles remain unsupported (issue #5).
 
 ## Hardware evidence (2026-11-27)
 
@@ -80,4 +80,4 @@ Maintainer-reported JPEG EXIF results from a Sony a6000 after a fresh firmware u
 
 All four report the expected LensSpec, LensInfo, LensModel, Composite LensID, focal length and full-frame lens format. The Hanimex EXIF f/22 demonstrates that the body can record a selected aperture within the advertised range, not that the physical iris was measured or actuated. The first JPEG includes LensFirmwareVersion Ver.04.008 and protocol 1.08; later JPEGs omit those tags and report LensMount2 as Unknown. The reason is unresolved (see issue #3); this evidence does not establish the new firmware version from EXIF alone. No raw files were independently inspected.
 
-**Result:** Independent profile upload and Helios -> Hanimex -> Helios metadata switching passed. The maintainer subsequently confirmed the backup/restore update wrapper at `426802f`, then confirmed native retention at `741c387` (`PROFILE_RESTORE=ALREADY_PRESENT`, `PROFILE_FLASH_RETAINED=PASS`). The temporary backup/restore workflow has therefore been removed from ordinary firmware uploads. Timing and failure injection remain separate tests.
+**Result:** Independent profile upload and Helios -> Hanimex -> Helios metadata switching passed. The maintainer subsequently confirmed the backup/restore update wrapper at `426802f`, then confirmed native retention at `741c387` (`PROFILE_RESTORE=ALREADY_PRESENT`, `PROFILE_FLASH_RETAINED=PASS`). The temporary backup/restore workflow has therefore been removed from ordinary firmware uploads. A subsequent changed-image upload failed on BOSSA 1.7, then passed with the BOSSA 1.9 correction at `862451d`; Hanimex remained valid. The Pentacon 200 mm f/4 profile was programmed, independently read back after automatic reset, and confirmed on camera. The Rubinar 500 mm f/5.6 profile correctly prevented aperture changes on camera. Timing, failure injection, production-environment and other camera regression remain separate tests.

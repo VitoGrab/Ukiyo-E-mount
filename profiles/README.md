@@ -17,7 +17,7 @@ python3 tools/generate_lens_profile.py --verify-only
 
 Zoom entries are retained for future support (issue #5) and skipped explicitly in batch mode; selecting one directly fails. No zoom BIN is produced. IDs must be unique lowercase kebab-case. The shared `base_packets.json` is the generator's protocol template input, not a lens record. Generation does not modify firmware.
 
-The firmware uses the embedded Helios fallback if no valid image is found in the reserved Flash region. Independent USB CDC programming and Helios/Hanimex switching were validated by the maintainer on a6000; see [Flash programming](../docs/PROFILE_FLASH.md). See [format and validation](../docs/LENS_PROFILES.md).
+The firmware uses the embedded Helios fallback if no valid image is found in the reserved Flash region. Independent USB CDC programming, Helios/Hanimex switching, Pentacon programming with automatic reset, and Rubinar fixed-aperture behavior were validated by the maintainer on a6000; see [Flash programming](../docs/PROFILE_FLASH.md). See [format and validation](../docs/LENS_PROFILES.md).
 
 ## Optical specification review (2026-11-27)
 
