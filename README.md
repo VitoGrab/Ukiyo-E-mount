@@ -17,7 +17,7 @@ to other lenses including zoom lenses.
 
 ### Development stages
 
-Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current baseline: **v0.411**, merged to main and functionally validated on Sony a6000 with external USB power.
+Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current baseline: **v0.411**, merged to main and functionally validated on Sony a6000 with external USB power. See the [v0.411 release notes](docs/releases/v0.411.md).
 
 | Stage | Deliverable | Exit criterion | Status |
 |---|---|---|---|
