@@ -30,16 +30,17 @@ unsigned received = 0;
 bool receiving = false;
 uint32_t last_activity = 0;
 
-// The existing LOGIC_VCC divider pulls A0 low when disconnected. The
-// physical camera must also be detached; voltage alone cannot prove that.
-bool idle_and_unpowered() {
-    return Serial && !emulator::active() && !camera_link::active() &&
-           analogRead(A0) < 50;
+// With direct camera power wiring, USB also supplies the A0 divider.
+// A0 cannot prove physical detachment. The operator must disconnect the
+// camera before connecting USB; both bus owners must be stopped throughout
+// the transfer and all Flash operations.
+bool maintenance_idle() {
+    return Serial && !emulator::active() && !camera_link::active();
 }
 
 bool stable_idle() {
     for (unsigned i = 0; i < 20; ++i) {
-        if (!idle_and_unpowered()) return false;
+        if (!maintenance_idle()) return false;
         delay(1);
     }
     return true;
@@ -117,20 +118,20 @@ bool write_image() {
     // Erase the old header first. Write page zero last as the commit marker.
     // Only the first three rows of the reserved region are touched.
     for (unsigned row = 0; ok && row < kRows; ++row) {
-        if (!idle_and_unpowered()) { ok = false; break; }
+        if (!maintenance_idle()) { ok = false; break; }
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
         ok = erase_row(row);
         __set_PRIMASK(primask);
     }
     for (unsigned page = 1; ok && page < kPages; ++page) {
-        if (!idle_and_unpowered()) { ok = false; break; }
+        if (!maintenance_idle()) { ok = false; break; }
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
         ok = write_page(page);
         __set_PRIMASK(primask);
     }
-    if (ok && idle_and_unpowered()) {
+    if (ok && maintenance_idle()) {
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
         ok = write_page(0);
@@ -180,7 +181,7 @@ void cancel() {
     received = 0;
 }
 void poll() {
-    if (receiving && (!Serial || millis() - last_activity >= kTimeoutMs))
+    if (receiving && (!maintenance_idle() || millis() - last_activity >= kTimeoutMs))
         cancel();
 }
 bool handle(const char* cmd) {
@@ -190,7 +191,7 @@ bool handle(const char* cmd) {
         Serial.println("PROFILE_ABORTED");
         return true;
     }
-    if (!idle_and_unpowered()) {
+    if (!maintenance_idle()) {
         error("STOP_AND_DISCONNECT_CAMERA");
         return true;
     }

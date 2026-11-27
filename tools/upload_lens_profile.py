@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import pathlib
+import shutil
 import struct
 import sys
 import time
@@ -97,7 +98,7 @@ class Device:
 
     def stop(self):
         self.send('x')
-        self.expect('EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z')
+        self.expect('EMULATOR_MODE=OFF_ALL_CAMERA_OUTPUTS_HIGH_Z', timeout=15)
         # Wait for camera_link::stop() as well, not just emulator::stop().
         deadline = time.monotonic() + 4
         while time.monotonic() < deadline:
@@ -185,14 +186,30 @@ def wait_until_armed(serial_module, port, verbose=False, timeout=20):
 def choose_profile():
     """Prepare fresh BINs before displaying the live catalog in the terminal."""
     profiles = prepare_profiles()
-    print("\nSelect a lens profile:")
-    for number, profile in enumerate(profiles, 1):
-        print(f"  {number:2d}. {profile['lens_model']}")
-    print("   0. Cancel")
+    # Keep the first entry visible even in a short VS Code terminal.
+    # The catalog order and numbering are stable across pages.
+    height = shutil.get_terminal_size(fallback=(80, 24)).lines
+    page_size = max(1, min(len(profiles), height - 6))
+    page = 0
     while True:
-        choice = input("Profile number: ").strip()
+        start = page * page_size
+        end = min(start + page_size, len(profiles))
+        print(f"\nSelect a lens profile ({start + 1}-{end} of {len(profiles)}):")
+        for number in range(start, end):
+            print(f"  {number + 1:2d}. {profiles[number]['lens_model']}")
+        if end < len(profiles):
+            print("   N. Next page")
+        if page:
+            print("   P. Previous page")
+        choice = input("Profile number (0 = cancel): ").strip().lower()
         if choice in ("", "0"):
             return None
+        if choice == "n" and end < len(profiles):
+            page += 1
+            continue
+        if choice == "p" and page:
+            page -= 1
+            continue
         if choice.isdecimal() and len(choice) <= 5:
             number = int(choice)
             if 1 <= number <= len(profiles):
@@ -211,11 +228,15 @@ def main():
     parser.add_argument('--port', required=True, help='Application USB CDC port (not bootloader)')
     parser.add_argument('--detached', action='store_true',
                         help='Confirm the camera is physically disconnected')
+    parser.add_argument('--reset', action='store_true',
+                        help='Legacy isolated-sense wiring only: reset and verify ARMED after upload')
     args = parser.parse_args()
     if sum((args.profile is not None, args.info, args.read is not None, args.select)) != 1:
         parser.error('Choose a profile BIN, --select, --info, or --read BIN')
     if not args.detached and not args.select:
         parser.error('Physically disconnect the camera and specify --detached')
+    if args.reset and not (args.select or args.profile):
+        parser.error('--reset is only supported for uploads')
     if args.read and args.read.exists():
         parser.error('Readback destination already exists')
     reset_requested = False
@@ -226,8 +247,8 @@ def main():
                 print('PROFILE_UPLOAD=CANCELLED')
                 return 0
             if not args.detached:
-                print('Physically disconnect the camera before programming the profile.')
-                if input('Type DETACHED to confirm (anything else cancels): ').strip() != 'DETACHED':
+                print('Physically disconnect the camera before connecting USB and programming the profile.')
+                if input('Camera physically disconnected? [y/N]: ').strip().lower() != 'y':
                     print('PROFILE_UPLOAD=CANCELLED')
                     return 0
         data = args.profile.read_bytes() if args.profile else None
@@ -259,9 +280,10 @@ def main():
                     device.upload(data)
                     print('PROFILE_UPLOAD=PASS (byte-for-byte readback verified)', flush=True)
                     print('PROFILE_LENS_MODEL=' + lens_model(data), flush=True)
-                    reset_requested = True
-                    device.reset()
-                    print('PROFILE_RESET=ACCEPTED', flush=True)
+                    if args.reset:
+                        reset_requested = True
+                        device.reset()
+                        print('PROFILE_RESET=ACCEPTED', flush=True)
                 elif args.read:
                     image = device.read()
                     validate_image(image)
@@ -281,7 +303,8 @@ def main():
             print('PROFILE_RESET=PASS')
             print('CAMERA_EMULATION=ARMED')
         else:
-            print('CAMERA_EMULATION=OFF; reset or power-cycle XIAO before reconnecting camera')
+            print('CAMERA_EMULATION=OFF; disconnect USB completely before mounting the camera.')
+            print('The next camera-powered boot loads the stored profile. For isolated external power, power-cycle the board.')
         return 0
     except (OSError, ValueError, EOFError, UploadError, KeyboardInterrupt) as exc:
         print(f'PROFILE_UPLOAD_ERROR={exc}', file=sys.stderr)

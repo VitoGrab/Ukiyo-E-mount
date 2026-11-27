@@ -1,5 +1,6 @@
 """Host protocol regression using a fake USB CDC peer; no hardware access."""
 import pathlib
+import os
 import sys
 import unittest
 from unittest.mock import patch
@@ -94,6 +95,23 @@ class UploadTests(unittest.TestCase):
              patch.dict(sys.modules, {'serial': None}):
             self.assertEqual(main(), 0)
 
+    def test_first_catalog_entry_and_pagination(self):
+        with patch('upload_lens_profile.shutil.get_terminal_size', return_value=os.terminal_size((80, 12))), \
+             patch('builtins.input', side_effect=['n', 'p', '1']):
+            self.assertEqual(choose_profile().name, 'helios-44m-4.bin')
+
+    def test_select_y_upload_leaves_bus_off(self):
+        peer = FakeSerial()
+        serial = SimpleNamespace(Serial=lambda *a, **kw: peer)
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--select']
+        with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.choose_profile', return_value=ROOT / 'profiles/helios-44m-4.bin'), \
+             patch('builtins.input', return_value='Y'), patch('upload_lens_profile.time.sleep'):
+            self.assertEqual(main(), 0)
+        self.assertEqual(peer.stored, (ROOT / 'profiles/helios-44m-4.bin').read_bytes())
+        self.assertNotIn('profile reset', peer.commands)
+        self.assertEqual(peer.commands[0], 'x')
+
     def test_success(self):
         peer = FakeSerial()
         device = Device(peer)
@@ -108,7 +126,7 @@ class UploadTests(unittest.TestCase):
         peer, rebooted = FakeSerial(), FakeSerial()
         serial = SimpleNamespace(Serial=lambda *a, **kw: next(connections))
         connections = iter((peer, rebooted))
-        args = ['upload_lens_profile.py', '--port', '/dev/test', '--detached',
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--detached', '--reset',
                 str(ROOT / 'profiles/hanimex-135-f2-8.bin')]
         with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
              patch('upload_lens_profile.time.sleep'):

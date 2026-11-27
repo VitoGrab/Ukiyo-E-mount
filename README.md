@@ -17,7 +17,7 @@ to other lenses including zoom lenses.
 
 ### Development stages
 
-Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current milestone: **v0.5**, standalone camera-powered prototype, functionally validated on Sony a6000 with the pre-release debug build. See [v0.5 release notes](docs/releases/v0.5.md).
+Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current milestone: **v0.51**, direct-power profile-maintenance correction to the v0.5 standalone camera-powered prototype, functionally validated on Sony a6000 with the pre-release debug build. See [v0.5 release notes](docs/releases/v0.5.md).
 
 | Stage | Deliverable | Exit criterion | Status |
 |---|---|---|---|
@@ -90,13 +90,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.5`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.411` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5` (or `0.50`) -> `pl[6]=0x05`, `pl[5]=0x00`.
-- The suffix occupies one byte (0–255). The generated v0.5 identity is expected to render as `Ver.05.000`; the historical v0.411 identity was expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
+- The current project version is `0.51`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.411` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5` (or `0.50`) -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The suffix occupies one byte (0–255). The generated v0.51 identity is expected to render as `Ver.05.001`; the v0.5 identity was expected to render as `Ver.05.000`; the historical v0.411 identity was expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/prepare_lens_profiles.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that all supported BINs, fallback header and firmware identity header match their sources.
-- Monitor startup, `h` help and status output use the generated `v0.5` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.51` label; there is no separate version command.
 
 ### Stages 4.6.2–4.7: powerbank validation and cleanup
 
@@ -225,12 +225,16 @@ The runtime staging milestone (commit `573a316`) passed profile generator verifi
 
 Both XIAO environments use a Seeed-derived linker script that reserves 8 KiB at `0x3E000..0x3FFFF`. The engine checks the reserved image once before the first full handshake and uses the existing Helios fallback if absent or invalid. USB CDC profile programming is implemented with an idle/disconnected-camera interlock, pre-write validation and byte-for-byte readback. The original full-erase upload invalidated this region. An initial no-full-erase upload retained the profile byte-for-byte (`741c387`), but a changed image failed verification with BOSSA 1.7. The project now selects BOSSA 1.9 with explicit offset `0x2000` and no full erase; the changed-image upload and Hanimex profile retention passed on hardware. Normal firmware uploads do not back up or restore profiles. See [Flash layout](docs/PROFILE_FLASH.md) for the remaining validation and hardware evidence.
 
-To program a profile, physically detach the camera, connect XIAO via USB and use `/opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin`. After verified programming, the uploader requests a normal MCU reset and checks that the application has re-armed. Run `--info` first (includes the stored lens model decoded from 0x3F); see the Flash layout document for limitations. On 2026-11-27 the maintainer confirmed byte-for-byte Flash readback and independent Helios -> Hanimex -> Helios switching on a6000, including correct focal length, model, maximum aperture and manual focus. See [EXIF evidence](docs/LENS_PROFILES.md#hardware-evidence-2026-11-27). Pentacon programming, automatic reset/re-arm, and fixed f/5.6 aperture for Rubinar were also confirmed on hardware. This was the v0.411 milestone; extended regression tests remain open.
+To program a profile, physically detach the camera, connect XIAO via USB and use `/opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin`. In v0.411 the uploader requested a normal MCU reset and checked re-arm. Since v0.51 it leaves the bus OFF by default after verified programming; unplug USB completely before mounting the camera. The next body-powered boot loads the new profile. Run `--info` first (includes the stored lens model decoded from 0x3F); see the Flash layout document for limitations. On 2026-11-27 the maintainer confirmed byte-for-byte Flash readback and independent Helios -> Hanimex -> Helios switching on a6000, including correct focal length, model, maximum aperture and manual focus. See [EXIF evidence](docs/LENS_PROFILES.md#hardware-evidence-2026-11-27). Pentacon programming, automatic reset/re-arm, and fixed f/5.6 aperture for Rubinar were also confirmed on hardware. This was the v0.411 milestone; extended regression tests remain open.
 
 Firmware updates: use `Ukiyo: Build & Upload` and close any existing monitor. The wrapper builds and retries the standard SAM-BA upload with full erase disabled by the project post script. No camera-detachment prompt or profile operations are performed by the firmware-upload tasks. Use `Ukiyo: Upload Lens Profile` to select a prime lens and explicitly confirm the camera is physically disconnected. See [firmware update workflow](docs/PROFILE_FLASH.md#firmware-updates-with-native-profile-retention).
 
-The automatic post-profile-upload reset requires v0.411 or later firmware and has passed hardware verification. Read-only profile operations do not reset the MCU and leave emulation off.
+The optional legacy post-profile-upload reset requires v0.411 or later firmware and has passed hardware verification with isolated-sense wiring; use `--reset` only for that wiring. Read-only profile operations do not reset the MCU and leave emulation off.
 
 ### v0.5 standalone camera-powered prototype
 
 See [release notes](docs/releases/v0.5.md) and [Stage 5 evidence](docs/STAGE5_CAMERA_POWER_POC.md). The profile format and E-mount protocol revision remain unchanged. Zoom is the next firmware work package, followed by additional body compatibility tests.
+
+### v0.51 direct-power profile programming fix
+
+A0 no longer blocks USB profile programming, because direct 3V3 wiring energizes the sense divider from USB. The bus must be stopped and the camera physically detached. The interactive picker uses `[y/N]` confirmation and terminal-height pagination. The default uploader leaves the verified profile in Flash and the emulator OFF until USB is unplugged; no automatic reset on direct-power wiring. Runtime handshake and sleep behavior are unchanged. See [profile programming](docs/PROFILE_FLASH.md).
