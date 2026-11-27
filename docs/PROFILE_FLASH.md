@@ -1,6 +1,6 @@
 # Persistent profile Flash layout
 
-Status: v0.411 development. Read-only startup loading and guarded USB CDC programming are implemented. The maintainer verified independent programming, readback and profile switching on XIAO SAMD21 and Sony a6000 on 2026-11-27. A standard firmware upload erased or invalidated the active profile on hardware. The guarded update wrapper now implements backup and restoration; the maintainer confirmed a successful integrated update with a valid profile remaining afterward (commit `426802f`).
+Status: v0.411 development. Independent profile programming and switching have passed on XIAO SAMD21 and Sony a6000. The maintainer also confirmed byte-for-byte native Flash retention during firmware upload without BOSSA full erase (commit `741c387`). The temporary backup/restore workflow has been removed from ordinary firmware uploads.
 
 ## Address map (SAMD21G18A)
 
@@ -22,11 +22,13 @@ Physically detach the camera (do not merely switch it off), leave the LOGIC_VCC 
 
 ```sh
 /opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached --info
-python3 tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin
+/opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin
 python3 tools/upload_lens_profile.py --port /dev/ttyACM0 --detached --read /tmp/ukiyo-profile.bin
 ```
 
 For `--info`, the host reads back the validated Flash image and decodes the lens model directly from message 0x3F. A missing/invalid stored profile reports `PROFILE_LENS_MODEL=NONE` and indicates the embedded fallback. No firmware change or new protocol command is needed.
+
+The VS Code task `Ukiyo: Upload Lens Profile` presents the supported prime profiles and requires explicit physical camera detachment. It uses the PlatformIO Python interpreter. When adding a supported catalog entry, also update the task's `lensProfile` picker (checked by a regression test), or use the CLI directly.
 
 The tool requires pyserial; use the PlatformIO Python environment if it is unavailable. It sends `x` to disable auto-arm, then checks NVM information. The device refuses profile commands if either camera mode is active or A0 detects voltage. Before programming it requires 20 consecutive low A0 samples and checks geometry, absolute linker bounds, EEPROM fuse and region lock. The fuse must indicate no EEPROM reservation; it never changes fuses or unlocks regions. A0 is a voltage interlock, not proof of physical detachment.
 
@@ -38,7 +40,7 @@ The commands `profile info`, `profile begin`, `profile data <offset-hex> <hex-by
 
 - Verify the exact installed Seeed framework and PlatformIO linker invocation, ELF load ranges, map symbols, and final BIN size on both environments.
 - Retain the existing fuse/geometry/lock interlocks for every programming attempt; do not change fuses. See the measured values below.
-- Extend the successful backup/restore regression to failed restoration, port re-enumeration and both build environments. Direct PlatformIO uploads bypass the backup/restore safety net; row-local erase behavior still requires hardware verification.
+- Regress the simplified firmware upload workflow in both build environments and whenever the BOSSA/PlatformIO package or bootloader changes. Native retention has passed on the maintainer's current installation.
 - Verify malformed and interrupted-write cases and measure cold handshake latency on a6000. Erased-to-valid programming and two-lens switching have been demonstrated.
 
 References: [Microchip SAM D21 memory architecture](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/memory-architecture/), [SAMD21 NVMCTRL](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/nvmctrl/), [PlatformIO XIAO board definition](https://github.com/platformio/platform-atmelsam/blob/develop/boards/seeed_xiao.json).
@@ -59,22 +61,38 @@ A subsequent info command returned `PROFILE_VALID=1`. EEPROM is disabled and all
 
 The exact tested firmware hash was not supplied. The final uploader diagnostics patch has not been separately hardware-tested. The subsequent standard Ukiyo Upload task changed PROFILE_VALID from 1 to 0, demonstrating loss of the active profile. The maintainer subsequently confirmed the update wrapper at `426802f` works and reported `PROFILE_VALID=1` after firmware upload. The full update log and independent post-update lens-name comparison were not supplied. Interrupted writes and measured cold-start timing remain open.
 
-## Firmware updates with profile preservation
-
-All four VS Code upload tasks use `tools/upload_with_retry.py` with the PlatformIO Python interpreter. Confirm the camera is physically detached when prompted. The wrapper builds and validates first, stops emulation, reads and validates the current profile, and persists the exact BIN in `.ukiyo-recovery/` before any firmware upload. No valid stored image is a normal state; communication failure or an ambiguous reply is not. It then runs the existing SAM-BA upload with retries, waits for the explicitly configured application port, restores the BIN if needed, compares readback and re-arms the emulator. USB identity is checked when available; no unrelated ports are probed. If the original port changes, recovery fails closed and retains the backup. Close the serial monitor first.
-
-```sh
-/opt/platformio/bin/python tools/upload_with_retry.py --environment seeed_xiao --detached
-```
-
-A successful update removes its recovery snapshot. If firmware upload, restore or verification fails, the snapshot remains on disk (including after PlatformIO clean); use its printed path with `tools/upload_lens_profile.py` after the application is reachable. Do not automatically retry an ambiguous profile commit. For first installation on old firmware without profile commands or a device stuck in the bootloader, explicitly pass `--fresh --detached` to the wrapper **only if losing any stored profile is acceptable**. It never skips backup automatically. A bare `pio run -t upload` or the IDE's native PlatformIO Upload action bypasses the wrapper's backup/restore safety net. The post script now disables explicit full erase for both paths, but profile retention without restoration is not yet hardware-verified. The profile is not protected by hardware.
-
-The wrapper defaults to `/dev/ttyACM0`; override with `--port` if necessary. Version remains v0.411.
-
-### Row-local erase experiment
+## Firmware updates with native profile retention
 
 The [PlatformIO SAM-BA builder](https://github.com/platformio/platform-atmelsam/blob/develop/builder/main.py) normally supplies `--erase`. The [Seeed SAM-BA monitor](https://github.com/Seeed-Studio/ArduinoCore-samd/blob/master/bootloaders/zero/sam_ba_monitor.c) implements its extended erase command from a starting address to the end of Flash. Neither `board_upload.maximum_size` nor the linker region constrains that command.
 
-The project post script `tools/platformio_upload_wait.py` removes the explicit `--erase` (or standalone `-e`) flag from SAM-BA uploads, leaving write, verify, reset, port discovery and all other flags unchanged. Both XIAO environments inherit the script. [Upstream BOSSA D2xNvmFlash](https://github.com/shumatech/BOSSA/blob/master/src/D2xNvmFlash.cpp) enables automatic row erasing in the absence of a full erase. Compatibility with the installed BOSSA version and actual XIAO bootloader still requires hardware verification. Old application bytes beyond the new firmware image may remain; this is not a full sanitization erase.
+The project post script `tools/platformio_upload_wait.py` removes the explicit `--erase` (or standalone `-e`) flag from SAM-BA uploads, leaving write, verify, reset, port discovery and all other flags unchanged. Both XIAO environments inherit the script. [Upstream BOSSA D2xNvmFlash](https://github.com/shumatech/BOSSA/blob/master/src/D2xNvmFlash.cpp) enables automatic row erasing in the absence of a full erase.
 
-For the first test, use the existing Ukiyo Upload task with a valid Hanimex profile. The recovery wrapper stays enabled. Expect `UKIYO_BOSSA_FULL_ERASE=DISABLED`, then `PROFILE_RESTORE=ALREADY_PRESENT` and `PROFILE_FLASH_RETAINED=PASS` if the exact profile survived natively. If the profile is missing or different, the wrapper prints `PROFILE_FLASH_RETAINED=FAIL` and restores its backup. A successful upload alone is insufficient to prove native retention. The build/verify and recovery logic must remain active while testing. No firmware version bump or bootloader change is involved.
+### Native retention evidence (2026-11-27)
+
+Maintainer-reported hardware test with commit `741c387`, using the temporary backup/restore wrapper as a safety net:
+
+```text
+PROFILE_VALID=1
+PROFILE_RESTORE=ALREADY_PRESENT
+PROFILE_FLASH_RETAINED=PASS
+PROFILE_VALID=1
+PROFILE_PRESERVED=PASS
+CAMERA_EMULATION=ARMED
+UPLOAD_RESULT=SUCCESS
+```
+
+The wrapper compared the post-upload image byte-for-byte against the pre-upload image before deciding not to restore it. This confirms retention without a profile write on the tested installation. The earlier backup/restore implementation (commit `426802f`) was successful but is no longer needed in ordinary uploads. Exact installed BOSSA version and production-environment regression were not supplied.
+
+### Current workflow
+
+All four ordinary Ukiyo firmware-upload tasks use the simplified `tools/upload_with_retry.py`: verify reference artifacts, build, upload through PlatformIO with retries. They do not open the application CDC port, request camera detachment, read the profile, create a recovery copy or issue profile writes. Initial firmware installation uses the same workflow. The firmware auto-arms on reset as before. Close any serial monitor before uploading.
+
+```sh
+python3 tools/upload_with_retry.py --environment seeed_xiao
+```
+
+The native PlatformIO upload target also uses the project post script. The reserved region is not hardware write-protected; other programmers, full erase commands, or incompatible uploader versions may still erase it. Old application bytes beyond the new firmware image may remain; this is not a full sanitization erase. Save any important custom profile separately (the explicit `--read` command remains available). Historical recovery snapshots are ignored by Git and are not removed by this change.
+
+Only the profile-management task and CLI retain the physical-detachment confirmation and firmware-side interlocks. The absence of a firmware-upload prompt is not evidence that flashing with an electrically connected camera has been tested. Follow the existing hardware connection/power guidance.
+
+Version remains v0.411.

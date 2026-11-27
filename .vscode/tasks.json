@@ -70,14 +70,13 @@
     {
       "label": "Ukiyo: Upload",
       "type": "process",
-      "command": "/opt/platformio/bin/python",
+      "command": "python3",
       "args": [
         "${workspaceFolder}/tools/upload_with_retry.py",
         "--environment",
         "seeed_xiao",
         "--attempts",
-        "3",
-        "${input:cameraDetached}"
+        "3"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -88,14 +87,30 @@
     {
       "label": "Ukiyo: Upload Production",
       "type": "process",
-      "command": "/opt/platformio/bin/python",
+      "command": "python3",
       "args": [
         "${workspaceFolder}/tools/upload_with_retry.py",
         "--environment",
         "seeed_xiao_production",
         "--attempts",
-        "3",
-        "${input:cameraDetached}"
+        "3"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Ukiyo: Upload Lens Profile",
+      "type": "process",
+      "command": "/opt/platformio/bin/python",
+      "args": [
+        "${workspaceFolder}/tools/upload_lens_profile.py",
+        "--port",
+        "/dev/ttyACM0",
+        "${input:cameraDetached}",
+        "${workspaceFolder}/profiles/${input:lensProfile}.bin"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -124,7 +139,7 @@
     {
       "label": "Ukiyo: Upload + Monitor",
       "type": "shell",
-      "command": "/opt/platformio/bin/python \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao --attempts 3 ${input:cameraDetached} && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
+      "command": "python3 \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao --attempts 3 && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -134,7 +149,7 @@
     {
       "label": "Ukiyo: Upload Production + Monitor",
       "type": "shell",
-      "command": "/opt/platformio/bin/python \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao_production --attempts 3 ${input:cameraDetached} && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
+      "command": "python3 \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao_production --attempts 3 && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -156,7 +171,7 @@
     {
       "id": "cameraDetached",
       "type": "pickString",
-      "description": "Physically disconnect the camera before updating firmware.",
+      "description": "Physically disconnect the camera before programming a lens profile.",
       "options": [
         {
           "label": "Cancel (camera still connected)",
@@ -168,6 +183,78 @@
         }
       ],
       "default": "--cancel"
+    },
+    {
+      "id": "lensProfile",
+      "type": "pickString",
+      "description": "Select the lens profile to program",
+      "options": [
+        {
+          "label": "HELIOS 44M-4 58mm f2",
+          "value": "helios-44m-4"
+        },
+        {
+          "label": "HANIMEX AUTOMATIC 135mm f2.8",
+          "value": "hanimex-135-f2-8"
+        },
+        {
+          "label": "JUPITER-9 85mm f2",
+          "value": "jupiter-9-85-2"
+        },
+        {
+          "label": "HELIOS 44-2 58mm f2",
+          "value": "helios-44-2"
+        },
+        {
+          "label": "ASAHI SUPER-TAKUMAR 50mm f1.4",
+          "value": "asahi-super-takumar-50-1-4"
+        },
+        {
+          "label": "CARL ZEISS JENA PANCOLAR 50mm f1.8",
+          "value": "carl-zeiss-jena-pancolar-50-1-8"
+        },
+        {
+          "label": "INDUSTAR 50-2 50mm f3.5",
+          "value": "industar-50-2"
+        },
+        {
+          "label": "CARL ZEISS JENA SONNAR 135mm f3.5",
+          "value": "carl-zeiss-jena-sonnar-135-3-5"
+        },
+        {
+          "label": "TAIR-11A 135mm f2.8",
+          "value": "tair-11a-135-2-8"
+        },
+        {
+          "label": "CARL ZEISS JENA FLEKTOGON 35mm f2.4",
+          "value": "carl-zeiss-jena-flektogon-35-2-4"
+        },
+        {
+          "label": "MIR-1B 37mm f2.8",
+          "value": "mir-1b-37-2-8"
+        },
+        {
+          "label": "TAIR-3S 300mm f4.5",
+          "value": "tair-3s-300-4-5"
+        },
+        {
+          "label": "CARL ZEISS JENA SONNAR 180mm f2.8",
+          "value": "carl-zeiss-jena-sonnar-180-2-8"
+        },
+        {
+          "label": "ASAHI SUPER-TAKUMAR 200mm f4",
+          "value": "asahi-super-takumar-200-4"
+        },
+        {
+          "label": "PENTACON 200mm f4",
+          "value": "pentacon-200-4"
+        },
+        {
+          "label": "RUBINAR 500mm f5.6",
+          "value": "rubinar-500-5-6"
+        }
+      ],
+      "default": "helios-44m-4"
     }
   ]
 }
