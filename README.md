@@ -2,6 +2,10 @@
 
 Open-hardware Sony E-mount lens emulator based on XIAO SAMD21 board bridging vintage manual optics and modern digital cameras.
 
+## Hardware
+
+See [hardware/README.md](hardware/README.md) for the target adapter parts, PCB and mechanical integration status, and the optional developer test setup.
+
 ### Objective
 
 Emulate a manual Sony E-mount lens for a Sony cameras, with a stable, fixed
