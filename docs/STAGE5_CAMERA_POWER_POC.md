@@ -10,6 +10,14 @@ The upstream [E-mount pinout](https://github.com/weiziqian/E-mount-protocol-RE) 
 
 [Seeed forum guidance](https://forum.seeedstudio.com/t/can-i-connect-an-external-3-3v-power-to-the-3v3-pin/272174) says external supply at 3V3 is possible but recommends regulated VIN. The [linked user report](https://forum.seeedstudio.com/t/xiao-samd21-undervoltage-200mv-output-on-pin-10-with-digitalwrite-high/273514) describes a 3.3 V buck-powered board; it does not establish safe simultaneous USB and external power or a Sony rail's capacity. Review the actual XIAO schematic/revision and regulator behavior. If its LDO is XC6206, [Torex](https://www.torex-europe.com/products/voltage-regulators/low-iq/xc6206/) specifies operating input up to 6 V; never feed unknown motor rail into VIN.
 
+## Maintainer measurements — 2026-11-27
+
+With the externally powered v0.411 prototype, the maintainer measured 4.87 V between Sony contacts 1 and 2 on the multimeter's 20 V DC range. LENS_POWER disappears when the a6000 enters sleep or is switched off. LOGIC_VCC remains present during sleep and temporarily after shutdown, consistent with previous observations. These are qualitative lifecycle observations and a steady-state voltage measurement; no transient waveform or current capacity was measured.
+
+This strengthens the preference for LOGIC_VCC: using motor power alone would remove MCU supply during sleep, losing the retained protocol state needed by the existing 0x0B short-wake path. Do not assume every native lens subsystem remains powered during sleep; the communication subsystem must remain available or resume in time.
+
+A conventional series diode would reduce the already-low logic supply and may introduce GPIO level mismatches. Prefer a low-drop reverse-current-blocking solution if required after electrical characterization; a diode is not a current limiter. Keep USB physically disconnected for an eventual direct-supply POC, and disconnect the external 3V3 supply path before attaching USB. Neither the current budget nor safe regulator reverse-feed behavior has been established.
+
 ## First measurements, no firmware changes
 
 - Keep the existing A0 100k/100k logic-supply divider and USB-powered v0.411 baseline. A0 is both a communication supply gate and a profile programming safety interlock; do not repurpose it for motor-power sensing.
