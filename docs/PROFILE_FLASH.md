@@ -1,6 +1,6 @@
 # Persistent profile Flash layout
 
-Status: v0.411 development. Independent profile programming and switching have passed on XIAO SAMD21 and Sony a6000. The maintainer also confirmed byte-for-byte native Flash retention during firmware upload without BOSSA full erase (commit `741c387`). The temporary backup/restore workflow has been removed from ordinary firmware uploads.
+Status: v0.411 development. Independent profile programming and switching have passed on XIAO SAMD21 and Sony a6000. The maintainer also confirmed byte-for-byte native Flash retention during firmware upload without BOSSA full erase (commit `741c387`). The subsequent changed-firmware upload failed verification with BOSSA 1.7; the project now selects BOSSA 1.9 with an explicit application offset. Changed-image retention remains to be verified.
 
 ## Address map (SAMD21G18A)
 
@@ -40,7 +40,7 @@ The commands `profile info`, `profile begin`, `profile data <offset-hex> <hex-by
 
 - Verify the exact installed Seeed framework and PlatformIO linker invocation, ELF load ranges, map symbols, and final BIN size on both environments.
 - Retain the existing fuse/geometry/lock interlocks for every programming attempt; do not change fuses. See the measured values below.
-- Regress the simplified firmware upload workflow in both build environments and whenever the BOSSA/PlatformIO package or bootloader changes. Native retention has passed on the maintainer's current installation.
+- Regress the simplified firmware upload workflow in both build environments and whenever the BOSSA/PlatformIO package or bootloader changes. Identical-image native retention passed on BOSSA 1.7, but changed-image verification failed. Validate the new 1.9 package, a changed firmware image and profile retention before release.
 - Verify malformed and interrupted-write cases and measure cold handshake latency on a6000. Erased-to-valid programming and two-lens switching have been demonstrated.
 
 References: [Microchip SAM D21 memory architecture](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/memory-architecture/), [SAMD21 NVMCTRL](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/nvmctrl/), [PlatformIO XIAO board definition](https://github.com/platformio/platform-atmelsam/blob/develop/boards/seeed_xiao.json).
@@ -65,7 +65,7 @@ The exact tested firmware hash was not supplied. The final uploader diagnostics 
 
 The [PlatformIO SAM-BA builder](https://github.com/platformio/platform-atmelsam/blob/develop/builder/main.py) normally supplies `--erase`. The [Seeed SAM-BA monitor](https://github.com/Seeed-Studio/ArduinoCore-samd/blob/master/bootloaders/zero/sam_ba_monitor.c) implements its extended erase command from a starting address to the end of Flash. Neither `board_upload.maximum_size` nor the linker region constrains that command.
 
-The project post script `tools/platformio_upload_wait.py` removes the explicit `--erase` (or standalone `-e`) flag from SAM-BA uploads, leaving write, verify, reset, port discovery and all other flags unchanged. Both XIAO environments inherit the script. [Upstream BOSSA D2xNvmFlash](https://github.com/shumatech/BOSSA/blob/master/src/D2xNvmFlash.cpp) enables automatic row erasing in the absence of a full erase.
+The project post script `tools/platformio_upload_wait.py` configures SAM-BA uploads with write, verify, reset, native USB and explicit application offset `0x2000`, without `--erase`. Both XIAO environments inherit the script and the BOSSA 1.9 package selection. [Upstream BOSSA 1.9.1 D2xNvmFlash](https://github.com/shumatech/BOSSA/blob/1.9.1/src/D2xNvmFlash.cpp) implements software row erasing in the absence of a full erase.
 
 ### Native retention evidence (2026-11-27)
 
@@ -81,7 +81,13 @@ CAMERA_EMULATION=ARMED
 UPLOAD_RESULT=SUCCESS
 ```
 
-The wrapper compared the post-upload image byte-for-byte against the pre-upload image before deciding not to restore it. This confirms retention without a profile write on the tested installation. The earlier backup/restore implementation (commit `426802f`) was successful but is no longer needed in ordinary uploads. Exact installed BOSSA version and production-environment regression were not supplied.
+The wrapper compared the post-upload image byte-for-byte against the pre-upload image before deciding not to restore it. This confirms retention without a profile write on the tested installation. The earlier backup/restore implementation (commit `426802f`) was successful. This retention test did not establish that a changed firmware image could be programmed without a full erase.
+
+### Changed-image failure and uploader correction
+
+The subsequent v0.411 firmware with software reset compiled to 41900 bytes (655 pages, previously 652) but BOSSA 1.7.0 (`tool-bossac@1.10700.190624`) failed checksum verification. The installed Atmel SAM platform is 9.0.0. In the [Arduino BOSSA legacy NvmFlash implementation](https://github.com/arduino/BOSSA/blob/arduino/src/NvmFlash.cpp), `eraseAuto(bool)` is a no-op; the accelerated buffer-write path likewise lacks a preceding row erase. Identical-image retention is therefore not sufficient evidence of changed-image programming.
+
+The [Atmel SAM 9.0.0 package manifest](https://github.com/platformio/platform-atmelsam/blob/v9.0.0/platform.json) explicitly supports `tool-bossac` in the 1.10900 series. The project now selects `platformio/tool-bossac@~1.10900.0` rather than the default 1.7 release. The post script explicitly sets `--offset 0x2000` (BOSSA 1.9 defaults to zero); never run a 1.9 upload without this offset on this board. The application limit and linker remain unchanged. The installed 1.9 package and changed-image upload have not yet been validated on the target. If the failed upload left the application unable to boot, enter the existing bootloader using the documented double-reset procedure and retry the normal task. Do not erase the entire chip.
 
 ### Current workflow
 

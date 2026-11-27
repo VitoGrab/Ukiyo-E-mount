@@ -77,14 +77,19 @@ def wait_for_new_serial_port(env, before):
     return new_port
 
 
-# BOSSA's D2xNvmFlash auto-erase normally erases only rows being written
-# when no explicit --erase is requested. The standard PlatformIO SAM-BA
-# flags include --erase, which also destroys our reserved profile region.
-# Keep the original write/verify/reset/USB flags and port-discovery action.
+# The 1.7 Arduino fork does not auto-erase SAMD21 rows. BOSSA 1.9
+# supports software row erase and uses physical Flash offsets; its
+# default offset is zero. Always specify 0x2000 to protect the bootloader.
+# Use the same native USB syntax as the PlatformIO SAMD51 1.9 builder.
 if env.subst("$UPLOAD_PROTOCOL") == "sam-ba":
-    flags = list(env["UPLOADERFLAGS"])
-    filtered = [flag for flag in flags if flag not in ("--erase", "-e")]
-    env.Replace(UPLOADERFLAGS=filtered)
+    flags = ["--port", '"$UPLOAD_PORT"', "--write", "--verify", "--reset",
+             "-U", "--offset", "0x2000"]
+    # Preserve PlatformIO's verbose diagnostic flags, if present.
+    for flag in ("--info", "--debug"):
+        if flag in env["UPLOADERFLAGS"]:
+            flags.insert(0, flag)
+    env.Replace(UPLOADERFLAGS=flags)
     print("UKIYO_BOSSA_FULL_ERASE=DISABLED")
+    print("UKIYO_BOSSA_APPLICATION_OFFSET=0x2000")
 
 env.AddMethod(wait_for_new_serial_port, "WaitForNewSerialPort")
