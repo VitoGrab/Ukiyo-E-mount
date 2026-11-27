@@ -1,13 +1,20 @@
 # Lens profiles
 
-Only manual prime lenses are currently supported. Each lens has one editable JSON source and one ready-to-program BIN. The initial Helios 44M-4 is the validated v0.49 reference lens; its new binary format still requires hardware regression.
+The single editable source is [profiles.json](profiles.json), an array of lens records. Each supported entry generates `<profile_id>.bin`. The initial catalog contains 16 primes and four reserved zoom entries supplied by the maintainer. Specifications are catalog inputs, not individually hardware-verified; check your exact lens variant.
 
-Copy `helios-44m-4.json` to a new filename, edit the lens parameters, then run from the repository root:
+Generate all supported profiles from the repository root:
 
 ```sh
-python3 tools/generate_lens_profile.py profiles/my-lens.json
+python3 tools/generate_lens_profile.py
 ```
 
-This produces `profiles/my-lens.bin` without changing firmware. `base_packets.json` is a shared generator input derived from the validated protocol templates, not an individual lens profile. No expert mode or per-lens packet directories are needed.
+Generate one or verify the entire library:
 
-Independent upload is not implemented yet. See [format and validation](../docs/LENS_PROFILES.md).
+```sh
+python3 tools/generate_lens_profile.py --profile-id hanimex-135-f2-8
+python3 tools/generate_lens_profile.py --verify-only
+```
+
+Zoom entries are retained for future support (issue #5) and skipped explicitly in batch mode; selecting one directly fails. No zoom BIN is produced. IDs must be unique lowercase kebab-case. The shared `base_packets.json` is the generator's protocol template input, not a lens record. Generation does not modify firmware.
+
+The current firmware uses the embedded Helios fallback. Independent Flash upload is not implemented yet. See [format and validation](../docs/LENS_PROFILES.md).

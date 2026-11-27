@@ -7,17 +7,14 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from apply_lens_profile import CONFIG, ProfileError, load_profile
+from apply_lens_profile import CONFIG, ProfileError, load_profile, validate_profile
 
 
 class LensProfileTests(unittest.TestCase):
     def validate(self, **changes):
-        profile = json.loads(CONFIG.read_text(encoding="utf-8"))
+        profile = dict(load_profile(CONFIG))
         profile.update(changes)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = pathlib.Path(tmp) / "profile.json"
-            path.write_text(json.dumps(profile), encoding="utf-8")
-            return load_profile(path)
+        return validate_profile(profile)
 
     def test_prime(self):
         profile = self.validate(focal_length_min_mm=135,

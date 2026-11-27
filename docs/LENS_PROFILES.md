@@ -4,22 +4,25 @@ The firmware and lens profile are independent data formats. Version 0.410 introd
 
 ## Generate a profile
 
-Copy a reference JSON from [profiles/](../profiles/), edit it, and run:
+Edit the single [profiles/profiles.json](../profiles/profiles.json) catalog, then run:
 
 ```sh
-python3 tools/generate_lens_profile.py profiles/my-lens.json
+python3 tools/generate_lens_profile.py
+python3 tools/generate_lens_profile.py --profile-id hanimex-135-f2-8
+python3 tools/generate_lens_profile.py --verify-only
 ```
 
-The generator writes only the corresponding BIN (or the path specified with `-o`). It does not modify the firmware. The shared `base_packets.json` contains the v0.49-derived frame templates. The embedded Helios fallback is maintained separately as a reference artifact. `python3 tools/apply_lens_profile.py --verify-only` checks the default BIN, fallback header and firmware identity; running it without the flag regenerates those reference artifacts only.
+The default command generates all supported primes as `profiles/<profile_id>.bin`. Zoom records are preserved for issue #5 but never encoded by this version. A direct zoom selection fails. Optional `--catalog` and `--output-dir` permit a separate user library. Duplicate or unsafe IDs are rejected. The generator does not modify firmware. The shared `base_packets.json` contains v0.49-derived templates. `python3 tools/apply_lens_profile.py --verify-only` checks the Helios reference BIN, fallback header and firmware identity; without the flag it regenerates these reference artifacts only.
+
 
 | Setting | Meaning |
 |---|---|
 | profile_id | Lowercase kebab-case identifier |
 | lens_model | ASCII model string, 1–63 bytes |
 | sony_lens_id | 16-bit lens ID (0 is the tested reference) |
-| lens_type | prime only; zoom rejected (issue #5) |
+| lens_type | prime supported; zoom reserved in catalog, rejected for generation (issue #5) |
 | focal_length_min_mm, focal_length_max_mm, focal_length_default_mm | Equal integer focal lengths, 1–500 mm |
-| focal_length_source | fixed |
+| focal_length_source | fixed for primes; zoom_range reserved |
 | aperture_max_f | Maximum opening at the shortest focal length |
 | aperture_max_tele_f | Maximum opening at the longest focal length; equal for primes |
 | aperture_min_f | Narrowest opening |
@@ -58,7 +61,7 @@ python3 -m unittest discover -s test -p 'test_*.py'
 pio run -e seeed_xiao
 ```
 
-The Python suite includes a native C loader test when `cc` is available. It covers two alternate synthetic lenses, CRC and semantic corruption, fallback and preservation of 0x01. On camera verify MF, focus aids, shooting, EXIF, sleep/wake and remount. The v0.49 runtime milestone passed these existing host and maintainer-reported a6000 hardware checks on 2026-11-27; the new v1 image loader is not yet hardware-validated.
+The Python suite includes a native C loader test when `cc` is available. It covers the full prime catalog, two alternate synthetic lenses, CRC and semantic corruption, fallback and preservation of 0x01. On camera verify MF, focus aids, shooting, EXIF, sleep/wake and remount. The v0.49 runtime milestone passed these existing host and maintainer-reported a6000 hardware checks on 2026-11-27; the new v1 image loader is not yet hardware-validated.
 
 ## Remaining work
 

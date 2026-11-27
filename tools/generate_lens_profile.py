@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a standalone prime lens profile BIN from a JSON configuration."""
+"""Generate independent prime-lens BINs from a JSON catalog."""
 from __future__ import annotations
 import argparse
 import json
@@ -8,7 +8,8 @@ import pathlib
 import struct
 import sys
 import zlib
-from apply_lens_profile import ROOT, ProfileError, load_profile
+from apply_lens_profile import (ROOT, CONFIG, ProfileError, load_catalog,
+                                select_profile, validate_profile)
 
 ORDER = [('05', 105), ('07', 43), ('08', 210), ('1b', 19),
          ('28', 44), ('35', 48), ('3f', 74)]
@@ -31,6 +32,7 @@ def put16(frame, offset, value):
     struct.pack_into('<H', frame, offset, value)
 
 def build_profile(p):
+    p = validate_profile(p)
     raw = json.loads(BASE.read_text(encoding='utf-8'))
     frames = {key: bytearray.fromhex(raw[key]) for key, _ in ORDER}
     for key, size in ORDER:
@@ -77,16 +79,40 @@ def fallback_header(data):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('profile', type=pathlib.Path)
-    parser.add_argument('-o', '--output', type=pathlib.Path)
+    parser.add_argument('--catalog', type=pathlib.Path, default=CONFIG)
+    parser.add_argument('--profile-id', help='Generate one supported profile instead of all primes')
+    parser.add_argument('--output-dir', type=pathlib.Path,
+                        help='Defaults to the catalog directory')
+    parser.add_argument('--verify-only', action='store_true',
+                        help='Compare existing BINs without writing')
     args = parser.parse_args()
     try:
-        output = args.output or args.profile.with_suffix('.bin')
-        if output.suffix.lower() != '.bin':
-            raise ProfileError('Output must have a .bin suffix')
-        data = build_profile(load_profile(args.profile))
-        output.write_bytes(data)
-        print(f'PROFILE={output} SIZE={len(data)} CRC32={struct.unpack_from("<I", data, 8)[0]:08X}')
+        profiles = load_catalog(args.catalog)
+        output_dir = args.output_dir or args.catalog.parent
+        if args.profile_id is not None:
+            selected = [select_profile(profiles, args.profile_id)]
+        else:
+            selected = [p for p in profiles.values() if p['lens_type'] == 'prime']
+            for p in profiles.values():
+                if p['lens_type'] == 'zoom':
+                    print(f"SKIP={p['profile_id']} REASON=zoom unsupported (issue #5)")
+                    if (output_dir / (p['profile_id'] + '.bin')).exists():
+                        raise ProfileError(f"Unexpected zoom BIN: {p['profile_id']}")
+        if not selected:
+            raise ProfileError('No supported prime profiles selected')
+        # Validate and encode everything before writing anything.
+        artifacts = [(output_dir / (p['profile_id'] + '.bin'), build_profile(p))
+                     for p in selected]
+        if not args.verify_only:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        for output, data in artifacts:
+            if args.verify_only:
+                if output.read_bytes() != data:
+                    raise ProfileError(f'Stale profile: {output}')
+            else:
+                output.write_bytes(data)
+            print(f'PROFILE={output} SIZE={len(data)} CRC32={struct.unpack_from("<I", data, 8)[0]:08X}')
+        print(f"PROFILES_{'VERIFIED' if args.verify_only else 'GENERATED'}={len(artifacts)}")
         return 0
     except (OSError, ProfileError, ValueError) as exc:
         print(f'LENS_PROFILE_ERROR={exc}', file=sys.stderr)

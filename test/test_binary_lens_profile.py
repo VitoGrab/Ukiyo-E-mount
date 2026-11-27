@@ -10,7 +10,7 @@ import zlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from apply_lens_profile import CONFIG, load_profile
+from apply_lens_profile import CONFIG, load_profile, load_catalog
 from generate_lens_profile import build_profile
 
 @unittest.skipUnless(shutil.which('cc'), 'Native C compiler unavailable')
@@ -56,3 +56,6 @@ class BinaryProfileTests(unittest.TestCase):
                 path.write_bytes(invalid)
                 paths.append(str(path))
             subprocess.run([str(exe), *paths], cwd=ROOT, check=True)
+            primes = [str(CONFIG.parent / (p['profile_id'] + '.bin'))
+                      for p in load_catalog().values() if p['lens_type'] == 'prime']
+            subprocess.run([str(exe), '--catalog', *primes], cwd=ROOT, check=True)

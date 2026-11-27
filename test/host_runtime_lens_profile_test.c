@@ -39,6 +39,17 @@ static void check(unsigned focal, unsigned id, unsigned maximum,
 int main(int argc, char **argv) {
     uint8_t image[UKIYO_PROFILE_SIZE], snapshot[EM_LEN_01];
     memcpy(snapshot, em_msg_01, sizeof(snapshot));
+    if (argc > 1 && strcmp(argv[1], "--catalog") == 0) {
+        for (int i = 2; i < argc; ++i) {
+            read_image(argv[i], image);
+            assert(ukiyo_profile_validate(image, sizeof(image)));
+            assert(ukiyo_profile_stage(image, sizeof(image)));
+            ukiyo_profile_apply();
+            assert(memcmp(snapshot, em_msg_01, sizeof(snapshot)) == 0);
+        }
+        printf("CATALOG_PROFILES_VALIDATED=%d\n", argc - 2);
+        return 0;
+    }
     ukiyo_profile_apply();
     check(580, 0, 0x1200, 0x1800, 0x1200, "HELIOS 44M-4 58mm f2");
     read_image("profiles/helios-44m-4.bin", image);

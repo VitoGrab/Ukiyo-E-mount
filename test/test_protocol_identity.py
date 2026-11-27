@@ -14,7 +14,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from apply_lens_profile import (  # noqa: E402
-    CONFIG, IDENTITY, VERSION_HEADER, ProfileError,
+    CONFIG, DEFAULT_BIN, IDENTITY, VERSION_HEADER, ProfileError,
     load_identity, load_profile, parse_project_version, render_version_header,
 )
 
@@ -53,7 +53,7 @@ class ProtocolIdentityTests(unittest.TestCase):
 
     def test_regeneration_matches_checked_in_files(self):
         binary = build_profile(self.profile)
-        self.assertEqual(binary, CONFIG.with_suffix('.bin').read_bytes())
+        self.assertEqual(binary, DEFAULT_BIN.read_bytes())
         self.assertEqual(fallback_header(binary),
                          (ROOT / 'include/emount/default_lens_profile.h').read_text())
 

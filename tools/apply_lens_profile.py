@@ -13,7 +13,9 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-CONFIG = ROOT / 'profiles' / 'helios-44m-4.json'
+CONFIG = ROOT / 'profiles' / 'profiles.json'
+DEFAULT_PROFILE_ID = 'helios-44m-4'
+DEFAULT_BIN = CONFIG.parent / (DEFAULT_PROFILE_ID + '.bin')
 IDENTITY = ROOT / 'config' / 'protocol_identity.json'
 VERSION_HEADER = ROOT / 'include' / 'ukiyo-e-mount' / 'version.h'
 
@@ -21,11 +23,14 @@ class ProfileError(ValueError):
     pass
 
 
-def load_profile(path: pathlib.Path) -> dict:
+def read_json(path: pathlib.Path):
     try:
-        p = json.loads(path.read_text(encoding='utf-8'))
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
         raise ProfileError(f'Cannot read profile {path}: {exc}') from exc
+
+
+def validate_profile(p: dict, *, allow_zoom: bool = False) -> dict:
     keys = {'profile_id', 'lens_model', 'sony_lens_id', 'lens_type', 'focal_length_min_mm',
             'focal_length_max_mm', 'focal_length_default_mm', 'focal_length_source',
             'aperture_max_f', 'aperture_max_tele_f', 'aperture_min_f', 'aperture_now_f'}
@@ -42,17 +47,23 @@ def load_profile(path: pathlib.Path) -> dict:
     lens_id = p['sony_lens_id']
     if type(lens_id) is not int or not 0 <= lens_id <= 65535:
         raise ProfileError('sony_lens_id must be 0..65535 integer')
-    if p['lens_type'] != 'prime':
+    kind = p['lens_type']
+    if kind != 'prime' and not (allow_zoom and kind == 'zoom'):
         raise ProfileError('Only prime lenses are supported; see issue #5')
-    if p['focal_length_source'] != 'fixed':
+    if kind == 'prime' and p['focal_length_source'] != 'fixed':
         raise ProfileError('Prime lenses require focal_length_source=fixed')
+    if kind == 'zoom' and p['focal_length_source'] != 'zoom_range':
+        raise ProfileError('Catalog zoom entries require focal_length_source=zoom_range')
     focal_keys = ('focal_length_min_mm', 'focal_length_max_mm', 'focal_length_default_mm')
     for key in focal_keys:
         mm = p[key]
         if type(mm) is not int or not 1 <= mm <= 500:
             raise ProfileError(f'{key} must be an integer from 1 to 500')
-    if len({p[key] for key in focal_keys}) != 1:
+    if kind == 'prime' and len({p[key] for key in focal_keys}) != 1:
         raise ProfileError('Prime lenses require identical minimum, maximum and default focal lengths')
+    if kind == 'zoom' and not (p['focal_length_min_mm'] < p['focal_length_max_mm'] and
+                              p['focal_length_min_mm'] <= p['focal_length_default_mm'] <= p['focal_length_max_mm']):
+        raise ProfileError('Zoom requires a nonempty range containing the default focal length')
     if any(type(p[k]) not in (int, float) for k in ('aperture_max_f', 'aperture_max_tele_f', 'aperture_min_f', 'aperture_now_f')):
         raise ProfileError('aperture values must be numbers')
     try:
@@ -64,13 +75,39 @@ def load_profile(path: pathlib.Path) -> dict:
         raise ProfileError('aperture values must be numbers') from exc
     if not all(map(math.isfinite, (wide, tele, narrow, reported))):
         raise ProfileError('aperture values must be finite')
-    if wide != tele:
+    if kind == 'prime' and wide != tele:
         raise ProfileError('Prime lenses require identical wide and tele maximum apertures')
     if not (1.0 <= wide <= reported <= narrow <= 64.0):
         raise ProfileError('Require 1 <= max aperture opening <= now <= min aperture opening <= 64')
-    if reported > 9.0:
+    if not 1.0 <= tele <= narrow:
+        raise ProfileError('Tele maximum aperture outside supported range')
+    if kind == 'prime' and reported > 9.0:
         raise ProfileError('EM_F_BCD nameplate table supports up to f/9 for NOW; adapt table before increasing')
     return p
+
+    
+def load_catalog(path: pathlib.Path = CONFIG) -> dict:
+    data = read_json(path)
+    if not isinstance(data, list) or not data:
+        raise ProfileError('Profile catalog must be a nonempty JSON array')
+    profiles = {}
+    for p in data:
+        p = validate_profile(p, allow_zoom=True)
+        key = p['profile_id']
+        if key in profiles:
+            raise ProfileError(f'Duplicate profile_id: {key}')
+        profiles[key] = p
+    return profiles
+
+
+def select_profile(profiles: dict, profile_id: str) -> dict:
+    if profile_id not in profiles:
+        raise ProfileError(f'Unknown profile_id: {profile_id}')
+    return validate_profile(profiles[profile_id])
+
+
+def load_profile(path: pathlib.Path = CONFIG, profile_id: str = DEFAULT_PROFILE_ID) -> dict:
+    return select_profile(load_catalog(path), profile_id)
 
 
 def parse_project_version(value: str) -> tuple[int, int]:
@@ -143,7 +180,7 @@ def main() -> int:
         binary = build_profile(load_profile(CONFIG))
         expected = {
             VERSION_HEADER: header.encode(),
-            CONFIG.with_suffix('.bin'): binary,
+            DEFAULT_BIN: binary,
             ROOT / 'include/emount/default_lens_profile.h': fallback_header(binary).encode(),
         }
         if args.verify_only:
