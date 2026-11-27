@@ -9,3 +9,6 @@
 
 # Distributable lens profiles are source-controlled.
 !profiles/*.bin
+
+# Recovery snapshots are local and must survive PlatformIO clean.
+.ukiyo-recovery/

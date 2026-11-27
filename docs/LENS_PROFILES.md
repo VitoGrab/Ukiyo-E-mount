@@ -65,7 +65,7 @@ The Python suite includes a native C loader test when `cc` is available. It cove
 
 ## Remaining work
 
-The Flash region and USB CDC programming are implemented in v0.411; see [Flash layout and programming](PROFILE_FLASH.md). Verify both linker/map configurations, bootloader erase behavior, interrupted writes and cold-start timing; ensure firmware updates preserve the selected profile. Programming/readback and profile switching have passed on the maintainer's XIAO/a6000. Zoom profiles remain unsupported (issue #5).
+The Flash region and USB CDC programming are implemented in v0.411; see [Flash layout and programming](PROFILE_FLASH.md). Verify both linker/map configurations, bootloader erase behavior, interrupted writes and cold-start timing; validate the new host backup/restore firmware-update workflow. Standard firmware flashing was confirmed to invalidate the stored profile. Programming/readback and profile switching have passed on the maintainer's XIAO/a6000. Zoom profiles remain unsupported (issue #5).
 
 ## Hardware evidence (2026-11-27)
 

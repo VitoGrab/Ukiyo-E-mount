@@ -70,13 +70,14 @@
     {
       "label": "Ukiyo: Upload",
       "type": "process",
-      "command": "python3",
+      "command": "/opt/platformio/bin/python",
       "args": [
         "${workspaceFolder}/tools/upload_with_retry.py",
         "--environment",
         "seeed_xiao",
         "--attempts",
-        "3"
+        "3",
+        "${input:cameraDetached}"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -87,13 +88,14 @@
     {
       "label": "Ukiyo: Upload Production",
       "type": "process",
-      "command": "python3",
+      "command": "/opt/platformio/bin/python",
       "args": [
         "${workspaceFolder}/tools/upload_with_retry.py",
         "--environment",
         "seeed_xiao_production",
         "--attempts",
-        "3"
+        "3",
+        "${input:cameraDetached}"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -122,7 +124,7 @@
     {
       "label": "Ukiyo: Upload + Monitor",
       "type": "shell",
-      "command": "python3 \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao --attempts 3 && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
+      "command": "/opt/platformio/bin/python \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao --attempts 3 ${input:cameraDetached} && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -132,7 +134,7 @@
     {
       "label": "Ukiyo: Upload Production + Monitor",
       "type": "shell",
-      "command": "python3 \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao_production --attempts 3 && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
+      "command": "/opt/platformio/bin/python \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao_production --attempts 3 ${input:cameraDetached} && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -148,6 +150,24 @@
         "reveal": "always",
         "panel": "shared"
       }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "cameraDetached",
+      "type": "pickString",
+      "description": "Physically disconnect the camera before updating firmware.",
+      "options": [
+        {
+          "label": "Cancel (camera still connected)",
+          "value": "--cancel"
+        },
+        {
+          "label": "Camera physically disconnected",
+          "value": "--detached"
+        }
+      ],
+      "default": "--cancel"
     }
   ]
 }

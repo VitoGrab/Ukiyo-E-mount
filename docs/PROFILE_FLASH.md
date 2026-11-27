@@ -1,6 +1,6 @@
 # Persistent profile Flash layout
 
-Status: v0.411 development. Read-only startup loading and guarded USB CDC programming are implemented. The maintainer verified independent programming, readback and profile switching on XIAO SAMD21 and Sony a6000 on 2026-11-27. Firmware-update preservation remains unverified.
+Status: v0.411 development. Read-only startup loading and guarded USB CDC programming are implemented. The maintainer verified independent programming, readback and profile switching on XIAO SAMD21 and Sony a6000 on 2026-11-27. A standard firmware upload erased or invalidated the active profile on hardware. The guarded update wrapper now implements backup and restoration; its integrated hardware test is pending.
 
 ## Address map (SAMD21G18A)
 
@@ -36,7 +36,7 @@ The commands `profile info`, `profile begin`, `profile data <offset-hex> <hex-by
 
 - Verify the exact installed Seeed framework and PlatformIO linker invocation, ELF load ranges, map symbols, and final BIN size on both environments.
 - Retain the existing fuse/geometry/lock interlocks for every programming attempt; do not change fuses. See the measured values below.
-- Inspect the actual SAM-BA/UF2 bootloader and BOSSA upload command. A normal application erase may include the profile region even though it is absent from the linked image. The existing firmware upload workflow is not yet profile-preserving. Do not claim persistence across firmware upgrades until proven.
+- Validate the new backup/restore firmware-update workflow on hardware, including failed restoration, port re-enumeration and both build environments. Direct PlatformIO uploads bypass preservation.
 - Verify malformed and interrupted-write cases and measure cold handshake latency on a6000. Erased-to-valid programming and two-lens switching have been demonstrated.
 
 References: [Microchip SAM D21 memory architecture](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/memory-architecture/), [SAMD21 NVMCTRL](https://developerhelp.microchip.com/xwiki/bin/view/products/mcu-mpu/32bit-mcu/sam/samd21-mcu-overview/peripherals/nvmctrl/), [PlatformIO XIAO board definition](https://github.com/platformio/platform-atmelsam/blob/develop/boards/seeed_xiao.json).
@@ -55,4 +55,16 @@ PROFILE_UPLOAD=PASS (byte-for-byte readback verified)
 
 A subsequent info command returned `PROFILE_VALID=1`. EEPROM is disabled and all lock regions were reported unlocked; no fuse changes were made. The maintainer then reported successful Helios -> Hanimex -> Helios switching on the a6000; see [EXIF evidence](LENS_PROFILES.md#hardware-evidence-2026-11-27).
 
-The exact tested firmware hash was not supplied. The final uploader diagnostics patch has not been separately hardware-tested. Firmware-update erase behavior, interrupted writes and measured cold-start timing remain open.
+The exact tested firmware hash was not supplied. The final uploader diagnostics patch has not been separately hardware-tested. The subsequent standard Ukiyo Upload task changed PROFILE_VALID from 1 to 0, demonstrating loss of the active profile. Integrated backup/restore, interrupted writes and measured cold-start timing remain open.
+
+## Firmware updates with profile preservation
+
+All four VS Code upload tasks use `tools/upload_with_retry.py` with the PlatformIO Python interpreter. Confirm the camera is physically detached when prompted. The wrapper builds and validates first, stops emulation, reads and validates the current profile, and persists the exact BIN in `.ukiyo-recovery/` before any firmware upload. No valid stored image is a normal state; communication failure or an ambiguous reply is not. It then runs the existing SAM-BA upload with retries, waits for the explicitly configured application port, restores the BIN if needed, compares readback and re-arms the emulator. USB identity is checked when available; no unrelated ports are probed. If the original port changes, recovery fails closed and retains the backup. Close the serial monitor first.
+
+```sh
+/opt/platformio/bin/python tools/upload_with_retry.py --environment seeed_xiao --detached
+```
+
+A successful update removes its recovery snapshot. If firmware upload, restore or verification fails, the snapshot remains on disk (including after PlatformIO clean); use its printed path with `tools/upload_lens_profile.py` after the application is reachable. Do not automatically retry an ambiguous profile commit. For first installation on old firmware without profile commands or a device stuck in the bootloader, explicitly pass `--fresh --detached` to the wrapper **only if losing any stored profile is acceptable**. It never skips backup automatically. A bare `pio run -t upload` or the IDE's native PlatformIO Upload action bypasses the wrapper and can erase the profile. The profile is not protected by hardware; preservation is implemented at the host workflow level.
+
+The wrapper defaults to `/dev/ttyACM0`; override with `--port` if necessary. Version remains v0.411.
