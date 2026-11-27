@@ -4,7 +4,7 @@ The XIAO has three GPIO-controlled, active-low LEDs and a separate hardware powe
 
 | LED | Arduino pin | Debug build behaviour |
 |---|---:|---|
-| User | `LED_BUILTIN` (13) | Solid on while camera LOGIC_VCC is detected |
+| User | `LED_BUILTIN` (13) | Solid on while camera LOGIC_VCC is detected, except during protocol sleep |
 | RX | `PIN_LED_RXL` (12) | 100 ms pulse when the body handshake completes (0x0A answered) |
 | TX | `PIN_LED_TXL` (11) | 300 ms pulse when a protocol/transport diagnostic counter reports an error |
 | Power | Hardware-connected to 3V3 | Controlled by board power; not software-controllable |
@@ -38,3 +38,5 @@ The Arduino SAMD USB CDC core also uses the XIAO RX/TX pins. The firmware theref
 The LED GPIO policy is applied after `Serial.begin()`, because USB CDC initialization configures the RX/TX pins. Production mode returns RX/TX to input/high-impedance and holds the User LED output HIGH. USB serial diagnostics remain available.
 
 The separate hardware Power LED is not connected to an MCU GPIO. Cover it with an opaque insulating material if light leakage inside the adapter is undesirable; do not attempt to disable it in firmware.
+
+During the Stage 5 power POC, all three software-controlled LEDs are suppressed in the protocol `Suspended` state. Normal indications resume on wake. The hardware Power LED remains illuminated whenever the board rail is present.

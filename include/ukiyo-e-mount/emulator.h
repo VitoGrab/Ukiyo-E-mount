@@ -14,6 +14,8 @@ void record_setup_done(uint32_t done_ms);
 void status_leds_init();
 bool arm();
 void poll();
+// Called at the end of loop; returns immediately unless idle is safe.
+void idle_if_suspended();
 void stop();
 void status();
 void trace();

@@ -30,6 +30,7 @@ uint32_t wake_started_ms = 0;
 uint32_t wake_successes = 0;
 uint32_t wake_retries = 0;
 uint32_t wake_supply_resets = 0;
+uint32_t suspended_idle_attempts = 0;
 bool log_suspended_pending = false;
 struct TraceDump {
   bool active;
@@ -147,6 +148,12 @@ void status_leds_all_off() {
 
 #if UKIYO_DEBUG_LEDS && UKIYO_PROTOCOL_ENGINE_PRESENT
 void status_leds_update(bool vcc_detected) {
+  // Suppress all software-controlled LEDs during the body's sleep interval.
+  // Do not repeatedly reconfigure the pins in the suspended polling loop.
+  if (mode == Suspended) {
+    if (led_vcc_on || led_rx_active || led_tx_active) status_leds_all_off();
+    return;
+  }
   if (led_vcc_on != vcc_detected) {
     digitalWrite(kLedUserPin, vcc_detected ? LOW : HIGH);
     led_vcc_on = vcc_detected;
@@ -431,6 +438,29 @@ void poll() {
 #endif
 }
 
+// Only the SAMD21 target executes WFI. Keep the peripheral clocks and
+// SysTick running: the existing EIC wake ISR, ADC qualification and timeouts
+// retain their normal behavior. Never idle in the two short-wake phases.
+void idle_if_suspended() {
+#if UKIYO_PROTOCOL_ENGINE_PRESENT && defined(__SAMD21G18A__)
+  if (mode != Suspended || !last_supply_state || log_suspended_pending ||
+      trace_dump.active || Serial) return;
+  // Close the check-to-WFI race: an enabled IRQ becoming pending with
+  // PRIMASK set wakes Cortex-M0+; its handler executes after unmasking.
+  if (__get_PRIMASK() != 0u) return;
+  __disable_irq();
+  if (!ukiyo_wake_monitor_triggered() && !ukiyo_body_cs_high()) {
+    PM->SLEEP.bit.IDLE = 0; // IDLE0: stop only the CPU clock.
+    SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+    ++suspended_idle_attempts;
+    __DSB();
+    __WFI();
+    __ISB();
+  }
+  __enable_irq();
+#endif
+}
+
 void status() {
   Serial.print("=== UKIYO EMULATOR "); Serial.print(UKIYO_PROJECT_VERSION_LABEL);
   Serial.println(" ===");
@@ -452,6 +482,7 @@ void status() {
 #if UKIYO_PROTOCOL_ENGINE_PRESENT
   ukiyo_supply_ok();
   const int adc = ukiyo_supply_adc();
+  Serial.print("SUSPENDED_IDLE_ATTEMPTS="); Serial.println(suspended_idle_attempts);
   Serial.print("LOGIC_VCC_ADC10="); Serial.println(adc);
   Serial.print("LOGIC_VCC_EST_MV="); Serial.println(adc * 6600L / 1023L);
   Serial.print("LOGIC_VCC_DETECTED="); Serial.println(ukiyo_supply_ok() ? "YES" : "NO");

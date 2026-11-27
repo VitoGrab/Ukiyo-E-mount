@@ -150,4 +150,5 @@ void loop() {
   poll_command();
   ukiyoemount::emulator::poll_trace();
   ukiyoemount::camera_link::poll();
+  ukiyoemount::emulator::idle_if_suspended();
 }
