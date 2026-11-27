@@ -75,3 +75,7 @@ Debug LEDs are suppressed during Suspended; the hardware power LED cannot be dis
 ### IDLE0 functional acceptance — 2026-11-27
 
 The maintainer confirmed body-only operation with the IDLE0 sleep optimization build at `1eeda80d8b931f4a2fbbdc38e8129c68f9761cc8`: software-controlled LEDs extinguish when the camera enters sleep, half-pressing the shutter wakes the camera and adapter almost immediately, and the normal LED indication returns. The handheld multimeter indicates no discernible change in rail voltage relative to the previous build, within its stated uncertainty. Functional sleep/wake behavior: PASS on a6000. Actual WFI residency, wake latency, supply current reduction, transient voltage and long-duration reliability were not instrumentally measured. Production build, other camera bodies and deeper sleep modes are not covered by this acceptance.
+
+## Core firmware closure decision
+
+The maintainer chose to merge the functional Stage 5 prototype as v0.5, without an undervoltage LED warning or deeper sleep implementation. Production mode keeps software-controlled LEDs disabled. The next firmware milestone is manual zoom support, followed by systematic cross-body compatibility testing. Mechanical integration proceeds in parallel using separately purchased SELP1650 service contact assemblies rather than a donor lens. Outstanding electrical and production qualification items remain explicitly open.

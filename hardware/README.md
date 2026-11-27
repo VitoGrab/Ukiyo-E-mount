@@ -18,7 +18,7 @@ A photograph of the reference M42–NEX adapter will be added here by the projec
 
 For the microcontroller, use the SAMD21 model, not another XIAO family member. The final assembly's connector/header and clearance requirements are TBD.
 
-A repurposed Sony SELP1650 rear contact assembly (X-2585-594-1), direct soldered wiring and a 3D-printed internal carrier are the preferred prototype concept under evaluation; a custom PCB may not be required if the electrical and mechanical tests succeed; see [PCB candidates](pcb/README.md#candidate-repurposed-sony-selp1650-contact-assembly). The PCB, its electrical component list, mounting method and camera-powered operation have not yet been finalized. Do not interpret this list as a complete fabrication or installation guide.
+A separately purchased Sony SELP1650 service rear contact assembly (X-2585-594-1), direct soldered wiring and a 3D-printed internal carrier are the selected prototype concept, pending purchase and physical validation; a custom PCB may not be required if the electrical and mechanical tests succeed; see [PCB candidates](pcb/README.md#candidate-repurposed-sony-selp1650-contact-assembly). The PCB, component list and mounting method remain open. Direct camera-powered operation has passed on the breadboard a6000 prototype; final electrical qualification remains open. Do not interpret this list as a complete fabrication or installation guide.
 
 ## Optional development hardware
 

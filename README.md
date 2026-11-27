@@ -17,7 +17,7 @@ to other lenses including zoom lenses.
 
 ### Development stages
 
-Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current baseline: **v0.411**, merged to main and functionally validated on Sony a6000 with external USB power. See the [v0.411 release notes](docs/releases/v0.411.md).
+Stage numbers describe work packages; firmware versions identify actual code milestones. Compact project versions are retained (e.g. v0.411); planned work is not assigned a firmware version in advance. Current milestone: **v0.5**, standalone camera-powered prototype, functionally validated on Sony a6000 with the pre-release debug build. See [v0.5 release notes](docs/releases/v0.5.md).
 
 | Stage | Deliverable | Exit criterion | Status |
 |---|---|---|---|
@@ -35,12 +35,13 @@ Stage numbers describe work packages; firmware versions identify actual code mil
 | 4.9. Runtime prime profiles | Independent runtime packet templates and firmware identity | Select/stage alternative profile without changing protocol engine | Completed (v0.49) |
 | 4.10. Standalone binary profiles | Catalog, 16 prime BINs, shared templates, v1 format and fallback | Independent generated profile images | Implemented (v0.410); camera validation followed in v0.411 |
 | 4.11. Persistent prime profiles | Reserved Flash, USB CDC programming, readback, reset, BOSSA 1.9 retention | Change prime profile without rebuilding; preserve it across changed firmware uploads | Passed on a6000 (v0.411); merged to main |
-| 5. Standalone power | Camera-rail characterization and protected power path | Safe cold boot, repeated mounts and wake without external USB or backfeeding | **Next — ready to begin characterization** |
-| 6. Mechanical integration | Contact assembly, mounting and protected interconnect | Secure fit, no shorts, optics unaffected | Planned; donor-contact concept under evaluation |
-| 7. Aperture sensing (extra) | Analog lever sensor or manual control | Reliable reported aperture values | Future |
-| 8. Extras | I2C sensors, lens position, optional ranging/AF experiments | Separate proof-of-concept tests | Future |
+| 5. Standalone power | Direct LOGIC_VCC prototype and low-power IDLE0 sleep | Functional body-only startup, remount and sleep/wake | Passed on a6000; final electrical and production qualification open (v0.5) |
+| 6. Manual zoom profiles | Focal range, default/current focal length and optical metadata | Validated zoom profile generation, programming and camera behavior | **Next** — [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5) |
+| 7. Cross-body compatibility | a6500 and additional bodies | Verify mount, MF, EXIF, zoom, sleep/wake and remount | After zoom |
+| 8. Mechanical integration | SELP1650 service contact assembly and internal carrier | Secure fit, no shorts, optics unaffected | Parallel hardware track; parts planned |
+| 9. Optional extras | Aperture sensing, I2C sensors, other experiments | Separate proof-of-concept tests | Future, not required for core firmware |
 
-**Parallel compatibility track:** a6500 and additional camera bodies remain untested. Verify mount, MF, EXIF, sleep/wake and remount separately; do not claim general Sony E-mount compatibility yet. Manual zoom support remains [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5). Neither is a prerequisite for beginning a6000 standalone-power characterization.
+The prime-lens firmware feature set is complete for the tested a6000 prototype. Zoom development comes before systematic cross-body testing. Mechanical work can proceed in parallel. No general E-mount compatibility or production-ready hardware claim is made.
 
 ### Stage 4.5: characterized body lifecycle (a6000; completed 2026-11-25)
 
@@ -89,13 +90,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.411`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.411` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
-- The suffix occupies one byte (0–255). The generated v0.411 identity is expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
+- The current project version is `0.5`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.411` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5` (or `0.50`) -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The suffix occupies one byte (0–255). The generated v0.5 identity is expected to render as `Ver.05.000`; the historical v0.411 identity was expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/prepare_lens_profiles.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that all supported BINs, fallback header and firmware identity header match their sources.
-- Monitor startup, `h` help and status output use the generated `v0.411` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.5` label; there is no separate version command.
 
 ### Stages 4.6.2–4.7: powerbank validation and cleanup
 
@@ -124,21 +125,13 @@ The protocol correction in v0.48, runtime templates in v0.49, standalone BIN for
 
 The maintainer confirmed native MF and EXIF on Helios/Hanimex, independent Pentacon programming and automatic reset/re-arm, Rubinar fixed f/5.6 behavior, and retention of Hanimex through a changed application upload using BOSSA 1.9 without full erase. The tested baseline was integrated at commit `28547ce`. The subsequent host-tool/task cleanup did not change firmware protocol or Flash programming logic.
 
-### Stage 5 — camera-rail power
+### Stage 5 — camera-rail power (functional POC completed)
 
-**Entry decision:** ready to start characterization on the a6000, not approved for direct camera-rail connection or a camera-powered release. Externally powered functionality is established. The absolute time from camera rail rise to first valid response, including the XIAO bootloader, has not yet been measured. Profile validation/copy occurs before the bus handshake in `em_init()`, so include a valid stored profile in cold-start measurements. Do not assume USB-independent operation means camera-rail operation has passed.
+On 2026-11-27 the maintainer confirmed a6000 operation with Sony contact 5 connected directly to XIAO 3V3, the existing 100k/100k A0 divider and XDETECT resistor retained, and USB physically disconnected. Motor power remains unused. Body-only startup, sleep/wake and live lens exchange passed. IDLE0 CPU sleep and extinguishing the software-controlled LEDs during suspension also passed functional tests. See [measurements and evidence](docs/STAGE5_CAMERA_POWER_POC.md).
 
-| Substage | Work | Acceptance / evidence |
-|---|---|---|
-| 5A. Baseline regression | Freeze v0.411; check prepared artifacts, host suite and both firmware builds; repeat selected a6000 lifecycle tests | Record results and keep working recovery path; resolve relevant failures before powered integration |
-| 5B. Rail characterization | Measure contact 5 (logic supply) and contact 2 (lens power), voltage ranges, rise/fall timing and available-current evidence; characterize XIAO load separately using a current-limited bench supply | Candidate rail and power budget supported by measurements/specifications; no assumption that logic rail can supply MCU |
-| 5C. Cold-start timing | Measure rail rise to first body request, safe GPIO readiness, first valid response and completed handshake; test fallback and stored profile, USB host absent | Establish actual timing margin; isolate bootloader, supply gate and profile overhead if necessary |
-| 5D. Protected supply design | Choose regulator/rail path based on results; check reverse current, USB coexistence, ground, brownout/reset and GPIO backfeed | Bench-validated protection, no unintended sourcing or unsafe voltage/current; retain USB programming/recovery |
-| 5E. Camera-powered prototype | Only after 5B–5D electrical checks, test standalone operation with camera, repeated cold mounts, off/on, sleep/wake, remount and shooting with saved profiles | Repeatable handshake and correct EXIF without external power/USB; no observed brownout, backfeeding or unsafe heating |
+The v0.5 milestone closes the core prime-lens firmware feature work. An undervoltage LED warning and deeper sleep modes are deliberately deferred: production disables software-controlled LEDs and additional power features are not needed for the demonstrated operation. The current A0 estimate is ratiometric under direct power, not an absolute voltage measurement.
 
-Use the [hardware documentation](hardware/README.md) and [wiring reference](docs/WIRING.md) as starting points, not as a final power schematic. Review the [XIAO SAMD21 manufacturer documentation](https://wiki.seeedstudio.com/Seeeduino-XIAO/) and schematic and SAMD21 electrical limits for the actual board before selecting the power path. Do not connect Sony contact 5 directly to XIAO 3V3 or contact 2 to XIAO without the regulator/protection review. Do not load an uncharacterized camera rail to determine a destructive current limit.
-
-**Remaining regression, not prerequisites for starting characterization:** production-environment hardware acceptance, complete host regression of the current tooling, interrupted profile writes, cross-body compatibility, intermittent firmware-version MakerNotes and zoom support. Cold-start margin, electrical protection and any failures affecting safe power operation are Stage 5 release gates. No new firmware version is assigned until a new code milestone exists.
+Disconnect the camera physically before USB firmware or profile programming. Never connect USB and camera LOGIC_VCC to the 3V3 rail simultaneously. Current draw, startup transients, reverse-feed protection, actual idle current savings, production-build hardware acceptance and final integrated mechanical hardware remain unqualified. This is a functional prototype milestone, not a safety-certified or production-ready design.
 
 ### VS Code development tasks
 
@@ -159,7 +152,7 @@ The PlatformIO post extra-script extends bootloader-port discovery to a fifteen-
 - `pio run -e seeed_xiao_production` builds the production configuration.
 - Add `-t upload` to either command to flash that exact build. The selected default environment is stored in `platformio.ini` by the build-type task.
 
-Debug mode: User LED is solid while LOGIC_VCC is detected; RX gives a short pulse after the 0x0A handshake completes; TX gives a longer pulse for malformed frames, dropped requests, unknown/incomplete instruction records or UART receive-ring overflow. Normal frame traffic and keepalives do not trigger LEDs. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
+Debug mode: User LED is solid while LOGIC_VCC is detected except during protocol sleep; RX gives a short pulse after the 0x0A handshake completes; TX gives a longer pulse for malformed frames, dropped requests, unknown/incomplete instruction records or UART receive-ring overflow. Normal frame traffic and keepalives do not trigger LEDs. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
 
 ### Technical design decisions
 
@@ -232,8 +225,12 @@ The runtime staging milestone (commit `573a316`) passed profile generator verifi
 
 Both XIAO environments use a Seeed-derived linker script that reserves 8 KiB at `0x3E000..0x3FFFF`. The engine checks the reserved image once before the first full handshake and uses the existing Helios fallback if absent or invalid. USB CDC profile programming is implemented with an idle/disconnected-camera interlock, pre-write validation and byte-for-byte readback. The original full-erase upload invalidated this region. An initial no-full-erase upload retained the profile byte-for-byte (`741c387`), but a changed image failed verification with BOSSA 1.7. The project now selects BOSSA 1.9 with explicit offset `0x2000` and no full erase; the changed-image upload and Hanimex profile retention passed on hardware. Normal firmware uploads do not back up or restore profiles. See [Flash layout](docs/PROFILE_FLASH.md) for the remaining validation and hardware evidence.
 
-To program a profile, physically detach the camera, connect XIAO via USB and use `/opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin`. After verified programming, the uploader requests a normal MCU reset and checks that the application has re-armed. Run `--info` first (includes the stored lens model decoded from 0x3F); see the Flash layout document for limitations. On 2026-11-27 the maintainer confirmed byte-for-byte Flash readback and independent Helios -> Hanimex -> Helios switching on a6000, including correct focal length, model, maximum aperture and manual focus. See [EXIF evidence](docs/LENS_PROFILES.md#hardware-evidence-2026-11-27). Pentacon programming, automatic reset/re-arm, and fixed f/5.6 aperture for Rubinar were also confirmed on hardware. Version remains v0.411; extended regression tests remain open.
+To program a profile, physically detach the camera, connect XIAO via USB and use `/opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin`. After verified programming, the uploader requests a normal MCU reset and checks that the application has re-armed. Run `--info` first (includes the stored lens model decoded from 0x3F); see the Flash layout document for limitations. On 2026-11-27 the maintainer confirmed byte-for-byte Flash readback and independent Helios -> Hanimex -> Helios switching on a6000, including correct focal length, model, maximum aperture and manual focus. See [EXIF evidence](docs/LENS_PROFILES.md#hardware-evidence-2026-11-27). Pentacon programming, automatic reset/re-arm, and fixed f/5.6 aperture for Rubinar were also confirmed on hardware. This was the v0.411 milestone; extended regression tests remain open.
 
 Firmware updates: use `Ukiyo: Build & Upload` and close any existing monitor. The wrapper builds and retries the standard SAM-BA upload with full erase disabled by the project post script. No camera-detachment prompt or profile operations are performed by the firmware-upload tasks. Use `Ukiyo: Upload Lens Profile` to select a prime lens and explicitly confirm the camera is physically disconnected. See [firmware update workflow](docs/PROFILE_FLASH.md#firmware-updates-with-native-profile-retention).
 
-The automatic post-profile-upload reset requires v0.411 firmware and has passed hardware verification. Read-only profile operations do not reset the MCU and leave emulation off.
+The automatic post-profile-upload reset requires v0.411 or later firmware and has passed hardware verification. Read-only profile operations do not reset the MCU and leave emulation off.
+
+### v0.5 standalone camera-powered prototype
+
+See [release notes](docs/releases/v0.5.md) and [Stage 5 evidence](docs/STAGE5_CAMERA_POWER_POC.md). The profile format and E-mount protocol revision remain unchanged. Zoom is the next firmware work package, followed by additional body compatibility tests.

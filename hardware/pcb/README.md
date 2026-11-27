@@ -6,7 +6,7 @@ This directory will contain the contact PCB design, schematic, PCB source files,
 
 ## Candidate: repurposed Sony SELP1650 contact assembly
 
-Status: **Under evaluation — not selected or validated for the final adapter.**
+Status: **Selected for the next mechanical prototype; procurement planned, not yet physically validated.**
 
 The Sony SELP1650 service parts list identifies the rear contact assembly as `X-2585-594-1` (also `X25855941`), description `BOX ASSY, BL CONTACT`, reference 13. Reusing a manufactured contact assembly could avoid fabricating the camera-facing contact surfaces and provide existing screw mounting features. A separate interconnect PCB may still be required.
 
@@ -30,3 +30,7 @@ The custom PCB and final mounting remain TBD. This candidate does not replace th
 ### Preferred prototype approach
 
 Investigate direct soldering of short wires to the exposed solder points of the original contact assembly. This may eliminate the need for the flex connector, donor SELP1650 mainboard and a custom contact/interconnect PCB. Do not remove the flex or solder until its electrical and mechanical role has been checked on the actual part. The final power interface and any additional components remain TBD pending camera-powered validation. A 3D-printed carrier is the preferred mechanical concept; see [Mechanical integration](../mechanical/README.md). This approach is proposed, not physically validated.
+
+## Procurement decision — 2026-11-27
+
+Purchase the SELP1650 service contact assembly separately (X-2585-594-1), potentially several units. Do not purchase a damaged donor lens solely for this purpose. Listing photos suggest accessible solder pads; verify on receipt before soldering. Direct wiring is preferred, with continuity mapping, strain relief and insulation. No order or physical fit is confirmed.

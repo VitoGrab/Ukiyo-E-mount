@@ -41,6 +41,7 @@ class ProtocolIdentityTests(unittest.TestCase):
     def test_compact_project_version_encoding(self) -> None:
         self.assertEqual(parse_project_version("0.42"), (0x04, 2))
         self.assertEqual(parse_project_version("0.50"), (0x05, 0))
+        self.assertEqual(parse_project_version("0.5"), (0x05, 0))
         self.assertEqual(parse_project_version("0.410"), (0x04, 10))
         self.assertEqual(parse_project_version("0.4255"), (0x04, 255))
 
@@ -63,7 +64,7 @@ class ProtocolIdentityTests(unittest.TestCase):
         self.assertEqual(before, build_profile(self.profile))
 
     def test_invalid_project_versions(self) -> None:
-        for value in ("0.4", "0.4.2", "4.02", "0.02", "0.4256", "0.4999", "1.42"):
+        for value in ("0.0", "0.4.2", "4.02", "0.02", "0.4256", "0.4999", "1.42"):
             with self.subTest(value=value):
                 with self.assertRaises(ProfileError):
                     parse_project_version(value)
