@@ -82,13 +82,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.48`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.48` -> `pl[6]=0x04`, `pl[5]=0x08`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The current project version is `0.49`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.49` -> `pl[6]=0x04`, `pl[5]=0x09`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
 - The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.008`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that the generated packet sources and compile-time version header match the JSON configuration.
-- Monitor startup, `h` help and status output use the generated `v0.48` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.49` label; there is no separate version command.
 
 ### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
@@ -201,4 +201,8 @@ Ukiyo-E-mount firmware is distributed under the [MIT License](LICENSE). The inte
 
 ### v0.48 protocol correction
 
-Messages `0x28` and `0x35` payload bytes 9–10 are aperture offsets, not current aperture. Keep them zero for the current profile, independent of the `0x08` request. Based on [upstream 51ce0a5](https://github.com/weiziqian/E-mount-impl-on-Techart-EA9/commit/51ce0a5716a148a3ff092fe1ffcd65678bac4371). Current aperture reporting and the `0x1B` response are unchanged. Hardware regression pending.
+Messages `0x28` and `0x35` payload bytes 9–10 are aperture offsets, not current aperture. Keep them zero for the current profile, independent of the `0x08` request. Based on [upstream 51ce0a5](https://github.com/weiziqian/E-mount-impl-on-Techart-EA9/commit/51ce0a5716a148a3ff092fe1ffcd65678bac4371). Current aperture reporting and the `0x1B` response are unchanged. Hardware regression confirmed on a6000 with the runtime-profile branch on 2026-11-27.
+
+### v0.49 runtime prime-lens profiles
+
+The runtime staging milestone (commit `573a316`) passed profile generator verification, Python regression tests, native host runtime-profile tests, XIAO SAMD21 build and maintainer-reported a6000 hardware regression on 2026-11-27. The version bump changes the reported firmware identity only. Profile loading from persistent storage and independent profile programming remain unimplemented. Zoom lenses are not supported (issue #5).

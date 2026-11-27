@@ -80,3 +80,7 @@ Host regression (no Arduino dependencies):
 ```sh
 cc -std=c99 -Wall -Wextra -Iinclude/emount src/emount/emount_packets.c test/host_runtime_lens_profile_test.c -o /tmp/ukiyo-profile-test && /tmp/ukiyo-profile-test
 ```
+
+### Validation status
+
+Runtime staging at `573a316` passed the documented host checks, firmware compilation and maintainer-reported a6000 hardware regression on 2026-11-27. The v0.49 identity bump follows this validation; persistent storage and independent uploads remain future work.
