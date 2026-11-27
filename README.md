@@ -213,4 +213,6 @@ The runtime staging milestone (commit `573a316`) passed profile generator verifi
 
 ### v0.411 reserved Flash and read-only profile loading (development)
 
-Both XIAO environments use a Seeed-derived linker script that reserves 8 KiB at `0x3E000..0x3FFFF`. The engine checks the reserved image once before the first full handshake and uses the existing Helios fallback if absent or invalid. The normal firmware upload path has not been changed and may erase this region; no profile programming is supported yet. See [Flash layout](docs/PROFILE_FLASH.md) for the required linker, fuse and upload validation before enabling writes.
+Both XIAO environments use a Seeed-derived linker script that reserves 8 KiB at `0x3E000..0x3FFFF`. The engine checks the reserved image once before the first full handshake and uses the existing Helios fallback if absent or invalid. USB CDC profile programming is implemented with an idle/disconnected-camera interlock, pre-write validation and byte-for-byte readback. The normal firmware upload path has not been changed and may erase this region. See [Flash layout](docs/PROFILE_FLASH.md) for the required linker, fuse and upload validation before enabling writes.
+
+To program a profile, physically detach the camera, connect XIAO via USB and use `python3 tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin`. Reset/power-cycle before reconnecting. Run `--info` first; see the Flash layout document for limitations. The v0.411 version is retained until profile programming is validated.

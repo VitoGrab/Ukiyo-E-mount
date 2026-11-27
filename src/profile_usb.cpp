@@ -99,6 +99,8 @@ bool write_page(unsigned page) {
         }
         words[i] = word;
     }
+    if ((NVMCTRL->STATUS.reg & kErrors) ||
+        (NVMCTRL->INTFLAG.reg & NVMCTRL_INTFLAG_ERROR)) return false;
     NVMCTRL->ADDR.reg = address / 2u;
     return nvm_command(NVMCTRL_CTRLA_CMD_WP);
 }
