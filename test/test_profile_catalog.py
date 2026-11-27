@@ -8,7 +8,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from apply_lens_profile import CONFIG, ProfileError, load_catalog, select_profile
+from prepare_lens_profiles import CONFIG, ProfileError, load_catalog, select_profile
 from generate_lens_profile import build_profile
 
 class CatalogTests(unittest.TestCase):

@@ -7,7 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from apply_lens_profile import CONFIG, ProfileError, load_profile, validate_profile
+from prepare_lens_profiles import CONFIG, ProfileError, load_profile, validate_profile
 
 
 class LensProfileTests(unittest.TestCase):

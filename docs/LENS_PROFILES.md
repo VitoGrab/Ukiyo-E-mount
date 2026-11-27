@@ -12,7 +12,7 @@ python3 tools/generate_lens_profile.py --profile-id hanimex-135-f2-8
 python3 tools/generate_lens_profile.py --verify-only
 ```
 
-The default command generates all supported primes as `profiles/<profile_id>.bin`. Zoom records are preserved for issue #5 but never encoded by this version. A direct zoom selection fails. Optional `--catalog` and `--output-dir` permit a separate user library. Duplicate or unsafe IDs are rejected. The generator does not modify firmware. The shared `base_packets.json` contains v0.49-derived templates. `python3 tools/apply_lens_profile.py --verify-only` checks the Helios reference BIN, fallback header and firmware identity; without the flag it regenerates these reference artifacts only.
+The default command generates all supported primes as `profiles/<profile_id>.bin`. Zoom records are preserved for issue #5 but never encoded by this version. A direct zoom selection fails. Optional `--catalog` and `--output-dir` permit a separate user library. Duplicate or unsafe IDs are rejected. The generator does not modify firmware. The shared `base_packets.json` contains v0.49-derived templates. `python3 tools/prepare_lens_profiles.py --verify-only` checks all supported BINs, the fallback header and firmware identity; without the flag it prepares all of them, writing only changed files. The interactive profile uploader prepares the catalog before showing its live list.
 
 
 | Setting | Meaning |
@@ -56,7 +56,7 @@ The loader checks header, CRC, exact frame order/length/class/ID/checksum, prime
 ## Regression
 
 ```sh
-python3 tools/apply_lens_profile.py --verify-only
+python3 tools/prepare_lens_profiles.py --verify-only
 python3 -m unittest discover -s test -p 'test_*.py'
 pio run -e seeed_xiao
 ```

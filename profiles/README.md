@@ -2,10 +2,10 @@
 
 The single editable source is [profiles.json](profiles.json), an array of lens records. Each supported entry generates `<profile_id>.bin`. The initial catalog contains 16 primes and four reserved zoom entries supplied by the maintainer. Specifications are catalog inputs, not individually hardware-verified; check your exact lens variant.
 
-Generate all supported profiles from the repository root:
+Prepare all supported profiles, embedded fallback and firmware identity from the repository root (also performed by the Build & Upload and interactive Upload Lens Profile tasks):
 
 ```sh
-python3 tools/generate_lens_profile.py
+python3 tools/prepare_lens_profiles.py
 ```
 
 Generate one or verify the entire library:

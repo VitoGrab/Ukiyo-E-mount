@@ -86,7 +86,7 @@ The numbered list below retains the complete long-term acceptance criteria.
 - The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.008`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
-- `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
+- `tools/prepare_lens_profiles.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that the reference BIN, fallback header and firmware identity header match their sources.
 - Monitor startup, `h` help and status output use the generated `v0.411` label; there is no separate version command.
 
@@ -130,42 +130,13 @@ Reserve an erase-row-aligned region at the end of application Flash for a versio
 
 ### VS Code development tasks
 
-The workspace tasks include separate debug and production builds/uploads, reference artifact regeneration/verification, serial monitoring and cleanup. Build tasks verify reference profile artifacts before proceeding.
+- `Ukiyo: Build & Upload` prepares profiles and firmware identity, builds the default environment from `platformio.ini`, and retries SAM-BA upload up to three times. No profile write or monitor launch.
+- `Ukiyo: Select Build Type` sets `[platformio] default_envs` to Debug (status LEDs enabled) or Production (status LEDs disabled). The selection persists in the tracked INI; changing it is a local configuration edit.
+- `Ukiyo: Upload Lens Profile` prepares the entire catalog, displays a numbered live list of supported lenses in the terminal, requires physical detachment confirmation and uploads only the selected BIN.
+- `Ukiyo: Monitor` opens the serial monitor separately.
+- `Ukiyo: Clean` cleans both build environments.
 
-- `Ukiyo: Regenerate Reference Artifacts` runs `tools/apply_lens_profile.py`.
-- `Ukiyo: Verify Reference Artifacts` runs the same tool with `--verify-only`.
-- `Ukiyo: Upload` and `Ukiyo: Upload Production` use `tools/upload_with_retry.py`: build once, then retry the SAM-BA upload up to three times.
-- The PlatformIO post extra-script extends bootloader-port discovery to a fifteen-second maximum, with a three-second fallback when the original port remains present and no re-enumeration is observed. It does not alter the 1200-baud reset touch or BOSSA transfer parameters.
-- If automatic reset still fails, use the XIAO's documented double-reset procedure to enter its bootloader, then retry the upload task.
-
-#### XIAO LED build modes
-
-- `pio run -e seeed_xiao` builds the debug configuration (default).
-- `pio run -e seeed_xiao_production` builds the production configuration.
-- Add `-t upload` to either command to flash that exact build.
-
-Debug mode: User LED is solid while LOGIC_VCC is detected; RX gives a short pulse after the 0x0A handshake completes; TX gives a longer pulse for malformed frames, dropped requests, unknown/incomplete instruction records or UART receive-ring overflow. Normal frame traffic and keepalives do not trigger LEDs. Production mode holds the User LED off and keeps RX/TX high-impedance. The hardware Power LED is connected directly to 3V3 and cannot be disabled in firmware. See [docs/LED_MODES.md](docs/LED_MODES.md) for implementation details.
-
-- Keep the proven PlatformIO `seeed_xiao` board configuration.
-- Use USB CDC only for diagnostics in early stages. Never put diagnostic
-  printing in time-critical E-mount processing.
-- Use `Serial1` hardware UART at D6/D7; 750 kbaud already passed loopback.
-- Keep E-mount protocol processing independent of hardware GPIO/UART backends.
-- Maintain the integrated E-mount protocol engine independently, retaining upstream attribution.
-- a6000 handshake has nine init exchanges: 01, 07, 0C, 0B, 08, 09, 0D,
-  10, 0A. Some other bodies require additional messages.
-- Treat 0x0C as a real baud-rate transition. Do not acknowledge a speed change
-  until the serial interface can switch to the negotiated rate.
-- Treat 0x16 shutdown, wake and link loss as independent lifecycle events.
-  Power present on A0 does not imply an active camera session; return to passive
-  listening after a confirmed shutdown or disconnection.
-- Frame parser uses declared length, checks the checksum, and ignores padding
-  after the terminator. It must reject truncated frames.
-- No autofocus/motor capabilities should be advertised until implemented.
-- Keep camera-driven state transitions independent of USB monitor commands.
-- Never answer malformed or unsupported messages speculatively; preserve the
-  last validated camera exchanges for offline regression testing.
-- Reserve D4/D5 for I2C and D0/D1 for optional aperture controls.
+`python3 tools/prepare_lens_profiles.py --verify-only` remains available for CI/manual validation. Use the XIAO's documented double-reset procedure if automatic bootloader entry fails.
 
 ### Projects which made this possible
 
@@ -217,6 +188,6 @@ Both XIAO environments use a Seeed-derived linker script that reserves 8 KiB at 
 
 To program a profile, physically detach the camera, connect XIAO via USB and use `/opt/platformio/bin/python tools/upload_lens_profile.py --port /dev/ttyACM0 --detached profiles/hanimex-135-f2-8.bin`. After verified programming, the uploader requests a normal MCU reset and checks that the application has re-armed. Run `--info` first (includes the stored lens model decoded from 0x3F); see the Flash layout document for limitations. On 2026-11-27 the maintainer confirmed byte-for-byte Flash readback and independent Helios -> Hanimex -> Helios switching on a6000, including correct focal length, model, maximum aperture and manual focus. See [EXIF evidence](docs/LENS_PROFILES.md#hardware-evidence-2026-11-27). Pentacon programming, automatic reset/re-arm, and fixed f/5.6 aperture for Rubinar were also confirmed on hardware. Version remains v0.411; extended regression tests remain open.
 
-Firmware updates: use `Ukiyo: Upload` (or its production/monitor equivalents) and close any existing monitor. The wrapper builds and retries the standard SAM-BA upload with full erase disabled by the project post script. No camera-detachment prompt or profile operations are performed by the firmware-upload tasks. Use `Ukiyo: Upload Lens Profile` to select a prime lens and explicitly confirm the camera is physically disconnected. See [firmware update workflow](docs/PROFILE_FLASH.md#firmware-updates-with-native-profile-retention).
+Firmware updates: use `Ukiyo: Build & Upload` and close any existing monitor. The wrapper builds and retries the standard SAM-BA upload with full erase disabled by the project post script. No camera-detachment prompt or profile operations are performed by the firmware-upload tasks. Use `Ukiyo: Upload Lens Profile` to select a prime lens and explicitly confirm the camera is physically disconnected. See [firmware update workflow](docs/PROFILE_FLASH.md#firmware-updates-with-native-profile-retention).
 
 The automatic post-profile-upload reset requires v0.411 firmware and has passed hardware verification. Read-only profile operations do not reset the MCU and leave emulation off.

@@ -9,6 +9,7 @@ import time
 import zlib
 
 from generate_lens_profile import ORDER, SIZE
+from prepare_lens_profiles import CONFIG, prepare_profiles
 
 CHUNK = 24
 
@@ -181,10 +182,29 @@ def wait_until_armed(serial_module, port, verbose=False, timeout=20):
     raise UploadError(f'Profile written, but application restart not confirmed on {port}: {last_error}')
 
 
+def choose_profile():
+    """Prepare fresh BINs before displaying the live catalog in the terminal."""
+    profiles = prepare_profiles()
+    print("\nSelect a lens profile:")
+    for number, profile in enumerate(profiles, 1):
+        print(f"  {number:2d}. {profile['lens_model']}")
+    print("   0. Cancel")
+    while True:
+        choice = input("Profile number: ").strip()
+        if choice in ("", "0"):
+            return None
+        if choice.isdecimal() and len(choice) <= 5:
+            number = int(choice)
+            if 1 <= number <= len(profiles):
+                return CONFIG.parent / (profiles[number - 1]['profile_id'] + '.bin')
+        print("Invalid selection.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('profile', type=pathlib.Path, nargs='?', help='BIN to upload')
     mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--select', action='store_true', help='Prepare profiles and select one interactively')
     mode.add_argument('--info', action='store_true', help='Display NVM layout and profile state')
     mode.add_argument('--read', type=pathlib.Path, metavar='BIN', help='Save a valid stored profile')
     parser.add_argument('--verbose', action='store_true', help='Show raw USB CDC command/response traffic')
@@ -192,14 +212,24 @@ def main():
     parser.add_argument('--detached', action='store_true',
                         help='Confirm the camera is physically disconnected')
     args = parser.parse_args()
-    if sum((args.profile is not None, args.info, args.read is not None)) != 1:
-        parser.error('Choose a profile BIN, --info, or --read BIN')
-    if not args.detached:
+    if sum((args.profile is not None, args.info, args.read is not None, args.select)) != 1:
+        parser.error('Choose a profile BIN, --select, --info, or --read BIN')
+    if not args.detached and not args.select:
         parser.error('Physically disconnect the camera and specify --detached')
     if args.read and args.read.exists():
         parser.error('Readback destination already exists')
     reset_requested = False
     try:
+        if args.select:
+            args.profile = choose_profile()
+            if args.profile is None:
+                print('PROFILE_UPLOAD=CANCELLED')
+                return 0
+            if not args.detached:
+                print('Physically disconnect the camera before programming the profile.')
+                if input('Type DETACHED to confirm (anything else cancels): ').strip() != 'DETACHED':
+                    print('PROFILE_UPLOAD=CANCELLED')
+                    return 0
         data = args.profile.read_bytes() if args.profile else None
         if data is not None:
             validate_image(data)
@@ -253,7 +283,7 @@ def main():
         else:
             print('CAMERA_EMULATION=OFF; reset or power-cycle XIAO before reconnecting camera')
         return 0
-    except (OSError, UploadError, KeyboardInterrupt) as exc:
+    except (OSError, ValueError, EOFError, UploadError, KeyboardInterrupt) as exc:
         print(f'PROFILE_UPLOAD_ERROR={exc}', file=sys.stderr)
         if reset_requested:
             print('Profile write was verified; reset confirmation failed. Do not repeat the write automatically.', file=sys.stderr)

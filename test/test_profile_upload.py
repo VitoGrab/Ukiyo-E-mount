@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from upload_lens_profile import Device, UploadError, validate_image, lens_model, wait_until_armed, main, SIZE, CHUNK
+from upload_lens_profile import Device, UploadError, validate_image, lens_model, wait_until_armed, choose_profile, main, SIZE, CHUNK
 
 class FakeSerial:
     def __init__(self, corrupt=False, reject=False, armed=True):
@@ -78,6 +78,21 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(lens_model(helios), 'HELIOS 44M-4 58mm f2')
         with self.assertRaises(UploadError):
             lens_model(self.image[:-1])
+
+    def test_dynamic_picker(self):
+        catalog = [{'profile_id': 'test-new-lens', 'lens_model': 'New lens'}]
+        with patch('upload_lens_profile.prepare_profiles', return_value=catalog) as prep, \
+             patch('builtins.input', return_value='1'):
+            self.assertEqual(choose_profile().name, 'test-new-lens.bin')
+        prep.assert_called_once_with()
+
+    def test_select_cancel_before_usb(self):
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--select']
+        with patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.choose_profile', return_value=ROOT / 'profiles/helios-44m-4.bin'), \
+             patch('builtins.input', return_value='no'), \
+             patch.dict(sys.modules, {'serial': None}):
+            self.assertEqual(main(), 0)
 
     def test_success(self):
         peer = FakeSerial()

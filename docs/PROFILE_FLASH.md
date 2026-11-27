@@ -28,7 +28,7 @@ python3 tools/upload_lens_profile.py --port /dev/ttyACM0 --detached --read /tmp/
 
 For `--info`, the host reads back the validated Flash image and decodes the lens model directly from message 0x3F. A missing/invalid stored profile reports `PROFILE_LENS_MODEL=NONE` and indicates the embedded fallback. No firmware change or new protocol command is needed.
 
-The VS Code task `Ukiyo: Upload Lens Profile` presents the supported prime profiles and requires explicit physical camera detachment. It uses the PlatformIO Python interpreter. When adding a supported catalog entry, also update the task's `lensProfile` picker (checked by a regression test), or use the CLI directly.
+The VS Code task `Ukiyo: Upload Lens Profile` runs `prepare_lens_profiles.py` through the uploader's `--select` mode, then presents the freshly prepared prime profiles in a numbered terminal menu and requires explicit physical camera detachment. It uses the PlatformIO Python interpreter. Catalog additions require no task configuration edits.
 
 The tool requires pyserial; use the PlatformIO Python environment if it is unavailable. It sends `x` to disable auto-arm, then checks NVM information. The device refuses profile commands if either camera mode is active or A0 detects voltage. Before programming it requires 20 consecutive low A0 samples and checks geometry, absolute linker bounds, EEPROM fuse and region lock. The fuse must indicate no EEPROM reservation; it never changes fuses or unlocks regions. A0 is a voltage interlock, not proof of physical detachment.
 
@@ -113,10 +113,10 @@ The implemented prime-profile workflow is accepted on the tested XIAO/a6000 conf
 
 ### Current workflow
 
-All four ordinary Ukiyo firmware-upload tasks use the simplified `tools/upload_with_retry.py`: verify reference artifacts, build, upload through PlatformIO with retries. They do not open the application CDC port, request camera detachment, read the profile, create a recovery copy or issue profile writes. Initial firmware installation uses the same workflow. The firmware auto-arms on reset as before. Close any serial monitor before uploading.
+The single `Ukiyo: Build & Upload` task uses `tools/upload_with_retry.py`: prepare profiles and identity, build the selected default environment, upload through PlatformIO with retries. They do not open the application CDC port, request camera detachment, read the profile, create a recovery copy or issue profile writes. Initial firmware installation uses the same workflow. The firmware auto-arms on reset as before. Close any serial monitor before uploading.
 
 ```sh
-python3 tools/upload_with_retry.py --environment seeed_xiao
+python3 tools/upload_with_retry.py
 ```
 
 The native PlatformIO upload target also uses the project post script. The reserved region is not hardware write-protected; other programmers, full erase commands, or incompatible uploader versions may still erase it. Old application bytes beyond the new firmware image may remain; this is not a full sanitization erase. Save any important custom profile separately (the explicit `--read` command remains available). Historical recovery snapshots are ignored by Git and are not removed by this change.

@@ -8,7 +8,7 @@ import pathlib
 import struct
 import sys
 import zlib
-from apply_lens_profile import (ROOT, CONFIG, ProfileError, load_catalog,
+from prepare_lens_profiles import (ROOT, CONFIG, ProfileError, load_catalog,
                                 select_profile, validate_profile)
 
 ORDER = [('05', 105), ('07', 43), ('08', 210), ('1b', 19),

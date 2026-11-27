@@ -5,100 +5,38 @@
   },
   "tasks": [
     {
-      "label": "Ukiyo: Verify Reference Artifacts",
+      "label": "Ukiyo: Build & Upload",
       "type": "process",
       "command": "python3",
       "args": [
-        "${workspaceFolder}/tools/apply_lens_profile.py",
-        "--verify-only"
+        "${workspaceFolder}/tools/upload_with_retry.py",
+        "--attempts",
+        "3"
       ],
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Ukiyo: Regenerate Reference Artifacts",
-      "type": "process",
-      "command": "python3",
-      "args": [
-        "${workspaceFolder}/tools/apply_lens_profile.py"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Ukiyo: Build",
-      "type": "process",
-      "command": "/opt/platformio/bin/pio",
-      "args": [
-        "run"
-      ],
-      "dependsOn": "Ukiyo: Verify Reference Artifacts",
-      "dependsOrder": "sequence",
+        "panel": "shared",
+        "focus": true
+      },
       "group": {
         "kind": "build",
         "isDefault": true
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
       }
     },
     {
-      "label": "Ukiyo: Build Production",
-      "type": "process",
-      "command": "/opt/platformio/bin/pio",
-      "args": [
-        "run",
-        "-e",
-        "seeed_xiao_production"
-      ],
-      "dependsOn": "Ukiyo: Verify Reference Artifacts",
-      "dependsOrder": "sequence",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Ukiyo: Upload",
+      "label": "Ukiyo: Select Build Type",
       "type": "process",
       "command": "python3",
       "args": [
-        "${workspaceFolder}/tools/upload_with_retry.py",
-        "--environment",
-        "seeed_xiao",
-        "--attempts",
-        "3"
+        "${workspaceFolder}/tools/select_build_type.py",
+        "${input:buildType}"
       ],
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Ukiyo: Upload Production",
-      "type": "process",
-      "command": "python3",
-      "args": [
-        "${workspaceFolder}/tools/upload_with_retry.py",
-        "--environment",
-        "seeed_xiao_production",
-        "--attempts",
-        "3"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
+        "panel": "shared",
+        "focus": true
       }
     },
     {
@@ -109,13 +47,13 @@
         "${workspaceFolder}/tools/upload_lens_profile.py",
         "--port",
         "/dev/ttyACM0",
-        "${input:cameraDetached}",
-        "${workspaceFolder}/profiles/${input:lensProfile}.bin"
+        "--select"
       ],
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "shared"
+        "panel": "dedicated",
+        "focus": true
       }
     },
     {
@@ -133,128 +71,46 @@
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Ukiyo: Upload + Monitor",
-      "type": "shell",
-      "command": "python3 \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao --attempts 3 && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Ukiyo: Upload Production + Monitor",
-      "type": "shell",
-      "command": "python3 \"${workspaceFolder}/tools/upload_with_retry.py\" --environment seeed_xiao_production --attempts 3 && sleep 1 && /opt/platformio/bin/pio device monitor -p /dev/ttyACM0 -b 115200",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
+        "panel": "dedicated",
+        "focus": true
       }
     },
     {
       "label": "Ukiyo: Clean",
-      "type": "shell",
-      "command": "/opt/platformio/bin/pio run -e seeed_xiao -t clean && /opt/platformio/bin/pio run -e seeed_xiao_production -t clean",
+      "type": "process",
+      "command": "/opt/platformio/bin/pio",
+      "args": [
+        "run",
+        "-e",
+        "seeed_xiao",
+        "-e",
+        "seeed_xiao_production",
+        "-t",
+        "clean"
+      ],
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "shared"
+        "panel": "shared",
+        "focus": true
       }
     }
   ],
   "inputs": [
     {
-      "id": "cameraDetached",
+      "id": "buildType",
       "type": "pickString",
-      "description": "Physically disconnect the camera before programming a lens profile.",
+      "description": "Select the default firmware build type",
       "options": [
         {
-          "label": "Cancel (camera still connected)",
-          "value": "--cancel"
+          "label": "Debug (status LEDs enabled)",
+          "value": "seeed_xiao"
         },
         {
-          "label": "Camera physically disconnected",
-          "value": "--detached"
+          "label": "Production (status LEDs disabled)",
+          "value": "seeed_xiao_production"
         }
-      ],
-      "default": "--cancel"
-    },
-    {
-      "id": "lensProfile",
-      "type": "pickString",
-      "description": "Select the lens profile to program",
-      "options": [
-        {
-          "label": "HELIOS 44M-4 58mm f2",
-          "value": "helios-44m-4"
-        },
-        {
-          "label": "HANIMEX AUTOMATIC 135mm f2.8",
-          "value": "hanimex-135-f2-8"
-        },
-        {
-          "label": "JUPITER-9 85mm f2",
-          "value": "jupiter-9-85-2"
-        },
-        {
-          "label": "HELIOS 44-2 58mm f2",
-          "value": "helios-44-2"
-        },
-        {
-          "label": "ASAHI SUPER-TAKUMAR 50mm f1.4",
-          "value": "asahi-super-takumar-50-1-4"
-        },
-        {
-          "label": "CARL ZEISS JENA PANCOLAR 50mm f1.8",
-          "value": "carl-zeiss-jena-pancolar-50-1-8"
-        },
-        {
-          "label": "INDUSTAR 50-2 50mm f3.5",
-          "value": "industar-50-2"
-        },
-        {
-          "label": "CARL ZEISS JENA SONNAR 135mm f3.5",
-          "value": "carl-zeiss-jena-sonnar-135-3-5"
-        },
-        {
-          "label": "TAIR-11A 135mm f2.8",
-          "value": "tair-11a-135-2-8"
-        },
-        {
-          "label": "CARL ZEISS JENA FLEKTOGON 35mm f2.4",
-          "value": "carl-zeiss-jena-flektogon-35-2-4"
-        },
-        {
-          "label": "MIR-1B 37mm f2.8",
-          "value": "mir-1b-37-2-8"
-        },
-        {
-          "label": "TAIR-3S 300mm f4.5",
-          "value": "tair-3s-300-4-5"
-        },
-        {
-          "label": "CARL ZEISS JENA SONNAR 180mm f2.8",
-          "value": "carl-zeiss-jena-sonnar-180-2-8"
-        },
-        {
-          "label": "ASAHI SUPER-TAKUMAR 200mm f4",
-          "value": "asahi-super-takumar-200-4"
-        },
-        {
-          "label": "PENTACON 200mm f4",
-          "value": "pentacon-200-4"
-        },
-        {
-          "label": "RUBINAR 500mm f5.6",
-          "value": "rubinar-500-5-6"
-        }
-      ],
-      "default": "helios-44m-4"
+      ]
     }
   ]
 }

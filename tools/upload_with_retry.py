@@ -7,6 +7,7 @@ commands or lens-profile reads/writes are needed for a firmware update.
 from __future__ import annotations
 
 import argparse
+import configparser
 import os
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PIO = "/opt/platformio/bin/pio"
-ALLOWED_ENVIRONMENTS = ("seeed_xiao", "seeed_xiao_production")
+from select_build_type import ENVIRONMENTS as ALLOWED_ENVIRONMENTS, default_environment
 
 
 def resolve_pio(value: str) -> str:
@@ -45,9 +46,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--environment",
-        required=True,
         choices=ALLOWED_ENVIRONMENTS,
-        help="PlatformIO environment to build and upload",
+        help="Override platformio.ini default_envs for this upload",
     )
     parser.add_argument(
         "--attempts",
@@ -68,19 +68,19 @@ def main() -> int:
 
     try:
         pio = resolve_pio(args.pio)
-    except FileNotFoundError as exc:
+        args.environment = args.environment or default_environment()
+    except (OSError, ValueError, configparser.Error) as exc:
         print("UPLOAD_ERROR=" + str(exc), file=sys.stderr)
         return 2
 
-    verify = [
+    prepare = [
         sys.executable,
-        str(ROOT / "tools" / "apply_lens_profile.py"),
-        "--verify-only",
+        str(ROOT / "tools" / "prepare_lens_profiles.py"),
     ]
-    print("=== VERIFY GENERATED LENS PROFILE ===", flush=True)
-    result = run(verify)
+    print("=== PREPARE LENS PROFILES ===", flush=True)
+    result = run(prepare)
     if result:
-        print("UPLOAD_ABORTED=Lens profile verification failed", file=sys.stderr)
+        print("UPLOAD_ABORTED=Lens profile preparation failed", file=sys.stderr)
         return result
 
     build = [pio, "run", "-e", args.environment]

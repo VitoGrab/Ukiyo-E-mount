@@ -13,7 +13,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from apply_lens_profile import (  # noqa: E402
+from prepare_lens_profiles import (  # noqa: E402
     CONFIG, DEFAULT_BIN, IDENTITY, VERSION_HEADER, ProfileError,
     load_identity, load_profile, parse_project_version, render_version_header,
 )
