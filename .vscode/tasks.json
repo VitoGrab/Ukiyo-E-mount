@@ -5,7 +5,7 @@
   },
   "tasks": [
     {
-      "label": "Ukiyo: Verify Lens Profile",
+      "label": "Ukiyo: Verify Reference Artifacts",
       "type": "process",
       "command": "python3",
       "args": [
@@ -19,7 +19,7 @@
       }
     },
     {
-      "label": "Ukiyo: Apply Lens Profile",
+      "label": "Ukiyo: Regenerate Reference Artifacts",
       "type": "process",
       "command": "python3",
       "args": [
@@ -38,7 +38,7 @@
       "args": [
         "run"
       ],
-      "dependsOn": "Ukiyo: Verify Lens Profile",
+      "dependsOn": "Ukiyo: Verify Reference Artifacts",
       "dependsOrder": "sequence",
       "group": {
         "kind": "build",
@@ -59,7 +59,7 @@
         "-e",
         "seeed_xiao_production"
       ],
-      "dependsOn": "Ukiyo: Verify Lens Profile",
+      "dependsOn": "Ukiyo: Verify Reference Artifacts",
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {

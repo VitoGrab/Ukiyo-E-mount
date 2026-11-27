@@ -6,57 +6,37 @@ import pathlib
 import re
 import sys
 import tempfile
+import struct
+import zlib
+from pathlib import Path
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from apply_lens_profile import (  # noqa: E402
-    CONFIG, IDENTITY, ENGINE_HEADERS, ENGINE_SOURCES, VERSION_HEADER, ProfileError, apply_to_sources,
+    CONFIG, IDENTITY, VERSION_HEADER, ProfileError,
     load_identity, load_profile, parse_project_version, render_version_header,
 )
 
 
-def packet_bytes(source: str, symbol: str) -> list[int]:
-    match = re.search(
-        r'uint8_t\s+' + re.escape(symbol) +
-        r'\s*\[EM_LEN_[0-9a-fA-F]+\]\s*=\s*\{(.*?)\};',
-        source, flags=re.S,
-    )
-    if match is None:
-        raise AssertionError(f'Cannot locate {symbol}')
-    body = re.sub(r'/\*.*?\*/', '', match.group(1), flags=re.S)
-    return [int(value, 16) for value in re.findall(r'0x[0-9a-fA-F]{2}', body)]
-
+from generate_lens_profile import build_profile, fallback_header, ORDER, SIZE
 
 class ProtocolIdentityTests(unittest.TestCase):
-    def setUp(self) -> None:
+    def setUp(self):
         self.profile = load_profile(CONFIG)
         self.identity = load_identity(IDENTITY)
-        self.header = (ENGINE_HEADERS / "emount.h").read_text(encoding="utf-8")
-        self.packets = (ENGINE_SOURCES / "emount_packets.c").read_text(encoding="utf-8")
 
-    def assert_packet(self, source: str, *, protocol: int, major: int, minor: int) -> None:
-        data = packet_bytes(source, "em_msg_07")
-        self.assertEqual(len(data), 43)
-        self.assertEqual(data[:6], [0xf0, 0x2b, 0, 2, 0, 7])
-        self.assertEqual(data[8:10], [protocol & 255, protocol >> 8])
-        self.assertEqual(data[11:13], [minor, major])
-        lens_id = self.profile["sony_lens_id"]
-        self.assertEqual(data[15:17], [lens_id & 255, lens_id >> 8])
-        csum = sum(data[1:-3]) & 0xffff
-        self.assertEqual(data[-3:-1], [csum & 255, csum >> 8])
-        self.assertEqual(data[-1], 0x55)
-
-    def test_current_config_matches_packet(self) -> None:
-        config = json.loads(IDENTITY.read_text(encoding="utf-8"))
-        digits = config["project_version"].split(".")[1]
-        major, minor = int(digits[0]), int(digits[1:])
-        protocol_major, protocol_minor = config["emount_protocol_version"].split(".")
-        protocol = (int(protocol_major) << 8) | int(protocol_minor, 16)
-        self.assertEqual(self.identity["lens_firmware_major_byte"], major)
-        self.assertEqual(self.identity["lens_firmware_minor_byte"], minor)
-        self.assertEqual(self.identity["emount_protocol_u16"], protocol)
-        self.assert_packet(self.packets, protocol=protocol, major=major, minor=minor)
+    def test_current_config_matches_packet(self):
+        data = build_profile(self.profile)
+        packet = data[16 + 105:16 + 105 + 43]
+        self.assertEqual(packet[8:10], b'\0\0')
+        self.assertEqual(packet[11:13], b'\0\0')
+        self.assertEqual(struct.unpack_from('<H', packet, 15)[0],
+                         self.profile['sony_lens_id'])
+        self.assertEqual(struct.unpack_from('<H', packet, 40)[0],
+                         sum(packet[1:-3]) & 0xffff)
+        self.assertEqual(len(data), SIZE)
+        self.assertEqual(struct.unpack_from('<I', data, 8)[0], zlib.crc32(data[16:]))
 
     def test_compact_project_version_encoding(self) -> None:
         self.assertEqual(parse_project_version("0.42"), (0x04, 2))
@@ -71,10 +51,16 @@ class ProtocolIdentityTests(unittest.TestCase):
         self.assertIn(f'#define UKIYO_PROJECT_VERSION "{version}"\n', expected)
         self.assertIn(f'#define UKIYO_PROJECT_VERSION_LABEL "v{version}"\n', expected)
 
-    def test_regeneration_matches_checked_in_files(self) -> None:
-        result = apply_to_sources(self.header, self.packets, self.profile, self.identity)
-        self.assertEqual(result, (self.header, self.packets))
-        self.assertEqual(apply_to_sources(*result, self.profile, self.identity), result)
+    def test_regeneration_matches_checked_in_files(self):
+        binary = build_profile(self.profile)
+        self.assertEqual(binary, CONFIG.with_suffix('.bin').read_bytes())
+        self.assertEqual(fallback_header(binary),
+                         (ROOT / 'include/emount/default_lens_profile.h').read_text())
+
+    def test_profile_independent_of_firmware_version(self):
+        before = build_profile(self.profile)
+        self.identity['project_version'] = '0.4255'
+        self.assertEqual(before, build_profile(self.profile))
 
     def test_invalid_project_versions(self) -> None:
         for value in ("0.4", "0.4.2", "4.02", "0.02", "0.4256", "0.4999", "1.42"):

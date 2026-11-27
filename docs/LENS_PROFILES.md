@@ -1,86 +1,65 @@
 # Lens profiles
 
-**Optical profile:** `config/lens_profile.json`  
-**Project/protocol identity:** `config/protocol_identity.json`
+The firmware and lens profile are independent data formats. Version 0.410 introduces the binary profile loader and generator; persistent Flash storage and upload are subsequent milestones.
 
-The optical profile and project/protocol identity are separate configuration files. Do not edit generated packet fields or lens constants by hand. Apply the profile after every edit to either JSON file:
+## Generate a profile
 
-## Firmware and protocol identity
-
-`config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision. The compact version notation maps directly to the two Sony lens-firmware bytes:
-
-| Project version | `0x07 pl[6]` (major) | `0x07 pl[5]` (suffix) | ExifTool representation |
-|---|---:|---:|---|
-| `0.42` | `0x04` | `0x02` | `Ver.04.002` |
-| `0.50` | `0x05` | `0x00` | `Ver.05.000` |
-
-The suffix is one byte (0–255). `pl[6]` is the observed major field; the `pl[5]` suffix mapping has been observed in a6000 ExifTool output (including `Ver.04.003`). The body-side timing/cache behaviour that makes these MakerNote tags appear only on some captures remains under open issue [#3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3).
-
-`emount_protocol_version` remains `1.08`; the earlier 1.31 experiment did not provide a reason to change the validated protocol baseline. The generator derives both firmware bytes from `project_version` and recalculates the `0x07` checksum. Do not maintain a separate lens-firmware version value.
-
-
-```bash
-python3 tools/apply_lens_profile.py --verify-only
-python3 tools/apply_lens_profile.py
-/opt/platformio/bin/pio run
-```
-
-The application changes the `include/emount/emount.h` lens constants and the template bodies of `em_msg_07` (protocol/firmware identity and Sony Lens ID) and `em_msg_3F` (ASCII lens model). It also generates `include/ukiyo-e-mount/version.h` from the same project identity for compile-time monitor output. It does **not** modify `emount.c`, the GPIO/UART HAL, lens capabilities or session lifecycle. Template structure is checked before writing. The script can be run repeatedly without importing upstream code. `--verify-only` also checks the generated version header.
-
-| Setting | Effect |
-|---|---|
-| `profile_id` | Human-readable configuration identifier, not sent to the camera |
-| `lens_model` | ASCII name sent in message `0x3F`; up to 63 bytes |
-| `sony_lens_id` | 16-bit ID in message `0x07`, payload bytes 9–10 |
-| `focal_length_default_mm` | Reported focal length, used in E-mount packet templates |
-| `aperture_max_f` | Maximum opening at the shortest focal length (f/2 for the current prime); transmitted as `EM_APERTURE_MAX` |
-| `aperture_max_tele_f` | Maximum opening at the longest focal length; must equal the wide value for primes |
-| `aperture_min_f` | Narrowest aperture (f/16); transmitted as `EM_APERTURE_MIN` |
-| `aperture_now_f` | Present reported f-number, transmitted as `EM_APERTURE_NOW`; stays f/2 until an aperture sensor is added |
-
-## Helios 44M-4
-
-- Model: `HELIOS 44M-4 58mm f2`
-- Focal length: 58 mm
-- Advertised aperture range: f/2–f/16; current reported aperture: f/2
-- No electronic iris control or aperture-position sensing
-- The camera receives the full range, but `NOW` remains f/2 regardless of the mechanical aperture ring until sensing is implemented. The camera **may** offer aperture changes because a range is advertised; the adapter will not actuate the iris. EXIF will continue to report f/2 unless the camera overrides it. Verify this behavior on A6000 before relying on exposure automation.
-- E-mount protocol encodes `MAX=f/2` as `0x1200`, `MIN=f/16` as `0x1800`, and `NOW=f/2` as `0x1200`.
-- `sony_lens_id=0` is an experiment to avoid the known `50531` collision with Sigma. ExifTool documents `0` as an unknown E-mount lens/other lens, but whether the A6000 writes that value and ExifTool's Composite LensID prefers LensModel must be tested on a fresh ARW. Camera handling of ID classes can vary.
-
-## Validation on camera
-
-Preserve an ARW from the working v0.4.0 / ID 50531 as a reference. After applying a profile and rebuilding, compare:
-
-```bash
-exiftool -G1 -a -s -n -LensType2 -LensMount -LensModel -LensInfo \
-  -FocalLength -FNumber DSC_NEW.ARW
-exiftool -G1 -a -s -LensID -LensModel -LensType2 DSC_NEW.ARW
-```
-
-Expected **to test**, not yet confirmed: `LensModel=HELIOS 44M-4 58mm f2`, `LensType2=0`, `FocalLength=58 mm`, `FNumber=2`. Also test whether the camera exposes or attempts control across f/2–f/16 even though no motor is present. Do not treat `Composite:LensID` as a literal field transmitted over the Sony E-mount protocol.
-
-## Known remaining work
-
-
-The active packet templates live in `src/emount/emount_packets.c`. The native MF configuration is integrated into the engine. Reported aperture behavior remains subject to camera regression testing; future physical aperture sensing is a separate roadmap stage.
-
-## Prime-only schema
-
-Profiles now declare `lens_type`, `focal_length_min_mm`, `focal_length_max_mm`, `focal_length_default_mm`, and `focal_length_source`. For a prime, all three focal lengths must be equal and the source must be `fixed`. Zoom profiles are rejected (see [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5)). The JSON range is not the on-wire encoding: primes still use zero in the second focal-length field of message 0x08. This schema change preserves the existing generated packets; runtime storage is a separate implementation step.
-
-Maximum aperture is specified at both focal-range endpoints. For primes both JSON values must match; message `0x08` payload byte 20 carries the maximum aperture in packed BCD, while byte 21 remains zero. Future zoom profiles may declare different endpoint values (for example f/3.5–5.6), or equal values for a constant-aperture zoom. No zoom support or interpolation is implemented yet. See [message 0x08](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x08.md) and issue #5.
-
-## Runtime staging (development)
-
-The prime-only `ukiyo_lens_profile` structure is an in-memory representation, not a flash format. `ukiyo_profile_stage()` copies a validated profile while the bus is idle. `ukiyo_profile_apply()` updates the seven metadata templates at full initialization; short wake preserves the active profile. The generated compile-time defaults remain as a fallback until persistent storage and an external uploader are implemented. Do not call these functions during active communication.
-
-Host regression (no Arduino dependencies):
+Copy a reference JSON from [profiles/](../profiles/), edit it, and run:
 
 ```sh
-cc -std=c99 -Wall -Wextra -Iinclude/emount src/emount/emount_packets.c test/host_runtime_lens_profile_test.c -o /tmp/ukiyo-profile-test && /tmp/ukiyo-profile-test
+python3 tools/generate_lens_profile.py profiles/my-lens.json
 ```
 
-### Validation status
+The generator writes only the corresponding BIN (or the path specified with `-o`). It does not modify the firmware. The shared `base_packets.json` contains the v0.49-derived frame templates. The embedded Helios fallback is maintained separately as a reference artifact. `python3 tools/apply_lens_profile.py --verify-only` checks the default BIN, fallback header and firmware identity; running it without the flag regenerates those reference artifacts only.
 
-Runtime staging at `573a316` passed the documented host checks, firmware compilation and maintainer-reported a6000 hardware regression on 2026-11-27. The v0.49 identity bump follows this validation; persistent storage and independent uploads remain future work.
+| Setting | Meaning |
+|---|---|
+| profile_id | Lowercase kebab-case identifier |
+| lens_model | ASCII model string, 1–63 bytes |
+| sony_lens_id | 16-bit lens ID (0 is the tested reference) |
+| lens_type | prime only; zoom rejected (issue #5) |
+| focal_length_min_mm, focal_length_max_mm, focal_length_default_mm | Equal integer focal lengths, 1–500 mm |
+| focal_length_source | fixed |
+| aperture_max_f | Maximum opening at the shortest focal length |
+| aperture_max_tele_f | Maximum opening at the longest focal length; equal for primes |
+| aperture_min_f | Narrowest opening |
+| aperture_now_f | Fixed reported f-number, independent of mechanical aperture |
+
+The existing aperture bounds (f/1–f/64, reported aperture no greater than f/9) are retained. There is no iris control or sensing.
+
+## Binary format v1
+
+All integers in the header are little-endian. The file is exactly 559 bytes.
+
+| Offset | Size | Value |
+|---:|---:|---|
+| 0 | 4 | ASCII UKLP |
+| 4 | 2 | Schema version 1 |
+| 6 | 2 | Total length 559 |
+| 8 | 4 | IEEE CRC32 of bytes 16–558 |
+| 12 | 4 | Reserved, zero |
+| 16 | 105 | 0x05 |
+| 121 | 43 | 0x07 |
+| 164 | 210 | 0x08 |
+| 374 | 19 | 0x1B |
+| 393 | 44 | 0x28 |
+| 437 | 48 | 0x35 |
+| 485 | 74 | 0x3F |
+
+Each template includes framing, nominal length and a checksum. The sender continues to update runtime fields and checksums. The profile's 0x07 firmware and protocol identity bytes are zero placeholders; the engine inserts the identity generated from `config/protocol_identity.json` (protocol 1.08). Message 0x01 and its capability bitmap remain engine-owned. Native MF overrides remain engine-owned, as do session and transport behavior. Aperture-offset fields in 0x28/0x35 stay zero.
+
+The loader checks header, CRC, exact frame order/length/class/ID/checksum, prime focal consistency, aperture consistency, selected native MF flags and null-padded ASCII name. CRC is not authentication; load only trusted profiles. Invalid staging leaves the previous profile unchanged; absent external data uses the built-in Helios fallback. Staging must occur while the bus is idle. The engine copies the selected template set at full initialization, before enabling the bus; short wake preserves the active set. Cold-start latency must be measured on hardware before camera-powered release.
+
+## Regression
+
+```sh
+python3 tools/apply_lens_profile.py --verify-only
+python3 -m unittest discover -s test -p 'test_*.py'
+pio run -e seeed_xiao
+```
+
+The Python suite includes a native C loader test when `cc` is available. It covers two alternate synthetic lenses, CRC and semantic corruption, fallback and preservation of 0x01. On camera verify MF, focus aids, shooting, EXIF, sleep/wake and remount. The v0.49 runtime milestone passed these existing host and maintainer-reported a6000 hardware checks on 2026-11-27; the new v1 image loader is not yet hardware-validated.
+
+## Remaining work
+
+Reserve and protect an erase-aligned Flash region, load one selected profile from it before cold handshake, implement independent profile upload and verify firmware updates preserve the profile. No Flash address or upload mechanism has been selected. Zoom profiles remain unsupported (issue #5).

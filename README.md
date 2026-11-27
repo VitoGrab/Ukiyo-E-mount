@@ -82,13 +82,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the compact project version and E-mount protocol revision.
 
-- The current project version is `0.49`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.49` -> `pl[6]=0x04`, `pl[5]=0x09`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
+- The current project version is `0.410`. Its first digit after the decimal point maps to the Sony firmware major byte and the remaining digits map to the suffix byte: `0.410` -> `pl[6]=0x04`, `pl[5]=0x0A`; `0.50` -> `pl[6]=0x05`, `pl[5]=0x00`.
 - The suffix occupies one byte (0–255). ExifTool renders the current wire identity as `Ver.04.008`.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
-- `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, patches message `0x07`, and recalculates its checksum. There is no separate firmware-version override or duplicate version field.
-- `--verify-only` checks that the generated packet sources and compile-time version header match the JSON configuration.
-- Monitor startup, `h` help and status output use the generated `v0.49` label; there is no separate version command.
+- `tools/apply_lens_profile.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
+- `--verify-only` checks that the reference BIN, fallback header and firmware identity header match their sources.
+- Monitor startup, `h` help and status output use the generated `v0.410` label; there is no separate version command.
 
 ### Stages 4.6.2-5: powerbank validation, cleanup, compatibility and power
 
@@ -130,10 +130,10 @@ Reserve an erase-row-aligned region at the end of application Flash for a versio
 
 ### VS Code development tasks
 
-The workspace tasks include separate debug and production builds/uploads, lens-profile apply/verification, serial monitoring and cleanup. Build tasks verify generated lens-profile sources before proceeding.
+The workspace tasks include separate debug and production builds/uploads, reference artifact regeneration/verification, serial monitoring and cleanup. Build tasks verify reference profile artifacts before proceeding.
 
-- `Ukiyo: Apply Lens Profile` runs `tools/apply_lens_profile.py`.
-- `Ukiyo: Verify Lens Profile` runs the same tool with `--verify-only`.
+- `Ukiyo: Regenerate Reference Artifacts` runs `tools/apply_lens_profile.py`.
+- `Ukiyo: Verify Reference Artifacts` runs the same tool with `--verify-only`.
 - `Ukiyo: Upload` and `Ukiyo: Upload Production` use `tools/upload_with_retry.py`: build once, then retry the SAM-BA upload up to three times.
 - The PlatformIO post extra-script extends bootloader-port discovery to a fifteen-second maximum, with a three-second fallback when the original port remains present and no re-enumeration is observed. It does not alter the 1200-baud reset touch or BOSSA transfer parameters.
 - If automatic reset still fails, use the XIAO's documented double-reset procedure to enter its bootloader, then retry the upload task.
@@ -206,3 +206,7 @@ Messages `0x28` and `0x35` payload bytes 9–10 are aperture offsets, not curren
 ### v0.49 runtime prime-lens profiles
 
 The runtime staging milestone (commit `573a316`) passed profile generator verification, Python regression tests, native host runtime-profile tests, XIAO SAMD21 build and maintainer-reported a6000 hardware regression on 2026-11-27. The version bump changes the reported firmware identity only. Profile loading from persistent storage and independent profile programming remain unimplemented. Zoom lenses are not supported (issue #5).
+
+### v0.410 standalone packet profiles (development)
+
+[profiles/](profiles/) contains JSON sources and distributable 559-byte binary prime-lens profiles. Generate a new profile with `python3 tools/generate_lens_profile.py profiles/my-lens.json` without editing firmware or rebuilding. The engine validates and stages the binary packet image; firmware identity and 0x01 remain firmware-owned. The current build still uses its embedded Helios fallback: persistent Flash loading and USB programming are not implemented yet. See [lens profile format](docs/LENS_PROFILES.md).
