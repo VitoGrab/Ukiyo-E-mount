@@ -266,7 +266,12 @@ void stop() {
 
 void poll() {
 #if UKIYO_PROTOCOL_ENGINE_PRESENT
-  if (mode == Off) return;
+  if (mode == Off) {
+    // Power characterization with all emulator outputs released. Keep the
+    // ADC gate sampling even when automatic emulation has been stopped.
+    (void)ukiyo_supply_ok();
+    return;
+  }
   const bool powered = ukiyo_supply_ok();
 #if UKIYO_DEBUG_LEDS
   status_leds_update(powered);
@@ -389,6 +394,12 @@ void poll() {
     ++failed_sessions;
     mode = Fault;
     log_mode("ABORT_CONFIRMED_LOGIC_VCC_LOSS");
+    if (Serial) {
+      const uint16_t loss_adc = ukiyo_supply_adc();
+      Serial.print("LOGIC_VCC_LOSS_ADC10="); Serial.println(loss_adc);
+      Serial.print("LOGIC_VCC_LOSS_EST_MV="); Serial.println(loss_adc * 6600L / 1023L);
+      Serial.print("LOGIC_VCC_LOSS_AT_US="); Serial.println(ukiyo_supply_last_off_us());
+    }
     return;
   }
   em_poll();

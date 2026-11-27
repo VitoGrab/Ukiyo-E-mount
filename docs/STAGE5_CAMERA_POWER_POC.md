@@ -30,3 +30,7 @@ A conventional series diode would reduce the already-low logic supply and may in
 ## Decision
 
 Prefer contact 5 for the first protected power POC, subject to measured current margin, reverse-feed checks and cold-start timing. Contact 2 is initially a measurement-only alternative, not an assumed available supply. No final supply design or Stage 5 acceptance is claimed.
+
+## Load characterization observations
+
+Maintainer reported 501 ADC counts (3232 mV estimated) with no additional load and 498 counts (3212 mV estimated) with 1 kOhm. With 470 Ohm the emulator entered Running at 276760 ms and aborted for qualified LOGIC_VCC loss at 276790 ms, then rearmed. This does not identify whether the rail physically fell, the ADC misread, or the body withdrew supply due to a failed session. Do not increase load or disable the electrical gate until independently measured. The current qualification thresholds are 370/310 counts and 3/12 ms. A diagnostic-only change keeps ADC sampling in Off mode and reports the raw sample at an active power-loss abort, without relaxing the output interlock. With USB power, use x to disable emulation before the passive measurement, s to inspect supply state, and measure contacts 5/3 directly; a body may deliberately switch off its rail when no lens responds. No evidence yet establishes safe direct supply or the cause of the 470 Ohm failure. Remove the added load before ordinary operation.
