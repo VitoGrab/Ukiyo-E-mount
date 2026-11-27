@@ -499,8 +499,9 @@ void status() {
   Serial.print("WAKE_START_AT_MS="); Serial.println(wake_started_ms);
   Serial.print("SESSION_COUNT="); Serial.println(completed_sessions);
   Serial.print("FAILED_SESSIONS="); Serial.println(failed_sessions);
-  Serial.println("OPTICS=COMPILE_TIME_LENS_PROFILE");
-  Serial.println("PROFILE_CONFIG=config/lens_profile.json");
+  Serial.println("OPTICS=BINARY_LENS_PROFILE");
+  Serial.println("PROFILE_CATALOG=profiles/profiles.json");
+  Serial.println("PROFILE_INFO=DETACH_CAMERA_AND_USE_profile_info");
 #else
   Serial.println("PROTOCOL_ENGINE=UNAVAILABLE");
 #endif

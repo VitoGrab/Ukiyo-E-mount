@@ -4,6 +4,7 @@
 #include "ukiyo-e-mount/camera_link.h"
 #include "ukiyo-e-mount/emulator.h"
 #include "ukiyo-e-mount/version.h"
+#include "ukiyo-e-mount/profile_usb.h"
 
 // Auto-arm the camera protocol before USB CDC; qualify LOGIC_VCC before driving outputs.
 // USB diagnostics remain manually selectable.
@@ -18,6 +19,7 @@ constexpr uint8_t kPinRx = 7;
 constexpr uint8_t kPinDetectFuture = 3;
 char command[80] = {};
 size_t command_used = 0;
+bool discard_command = false;
 bool banner_printed = false;
 
 void safe_pins() {
@@ -35,6 +37,9 @@ void print_status() {
 }
 
 void handle_command(const char* cmd) {
+  if (ukiyoemount::profile_usb::handle(cmd)) return;
+  // Any other command aborts an incomplete profile transfer before rearming.
+  ukiyoemount::profile_usb::cancel();
   // Every command is echoed with a monotonic timestamp for log correlation.
   // millis() wraps after ~49.7 days; micros() after ~71.6 minutes.
   Serial.print("[t_ms="); Serial.print(millis());
@@ -57,6 +62,7 @@ void handle_command(const char* cmd) {
     Serial.println("Auto emulation is armed at boot; x disables it until e or reset.");
     Serial.println("Commands: help, status, camera listen, camera probe, camera emulate, camera status, camera trace, camera stop");
     Serial.println("camera probe drives D10 only, never UART TX.");
+    Serial.println("Profile programming: detach camera, x, use tools/upload_lens_profile.py.");
   } else if (!strcmp(cmd, "camera status")) {
     print_status();
   } else if (!strcmp(cmd, "camera trace")) {
@@ -92,16 +98,25 @@ void poll_command() {
   while (Serial.available()) {
     const int ch = Serial.read();
     if (ch == '\r' || ch == '\n') {
+      if (discard_command) {
+        discard_command = false;
+        command_used = 0;
+        continue;
+      }
       if (command_used) {
         command[command_used] = '\0';
         handle_command(command);
         command_used = 0;
       }
+    } else if (discard_command) {
+      continue;
     } else if (ch >= 32 && ch <= 126) {
       if (command_used + 1 < sizeof(command)) {
         command[command_used++] = static_cast<char>(ch);
       } else {
         command_used = 0;
+        discard_command = true;
+        ukiyoemount::profile_usb::cancel();
         Serial.println("COMMAND_TOO_LONG");
       }
     }
@@ -131,6 +146,7 @@ void loop() {
     Serial.println(" READY / AUTO-ARMED");
     Serial.println("Type h, l, p, e, s, t or x. x disables auto-arm; e re-enables.");
   }
+  ukiyoemount::profile_usb::poll();
   poll_command();
   ukiyoemount::emulator::poll_trace();
   ukiyoemount::camera_link::poll();
