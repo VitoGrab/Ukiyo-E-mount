@@ -1,4 +1,4 @@
-"""Prime-only profile schema regression tests."""
+"""Prime and zoom profile schema regression tests."""
 import json
 import pathlib
 import sys
@@ -22,10 +22,25 @@ class LensProfileTests(unittest.TestCase):
                                 focal_length_default_mm=135)
         self.assertEqual(profile["focal_length_default_mm"], 135)
 
-    def test_zoom_rejected(self):
-        with self.assertRaisesRegex(ProfileError, "Only prime"):
-            self.validate(lens_type="zoom", focal_length_min_mm=80,
-                          focal_length_max_mm=200, focal_length_default_mm=135)
+    def test_zoom(self):
+        p = self.validate(lens_type="zoom", focal_length_source="zoom_range",
+                          focal_length_min_mm=80, focal_length_max_mm=200,
+                          focal_length_default_mm=135)
+        self.assertEqual(p["focal_length_default_mm"], 135)
+
+    def test_invalid_zoom_ranges(self):
+        for wide, tele, default in ((80, 80, 80), (200, 80, 135),
+                                    (80, 200, 79), (80, 200, 201)):
+            with self.subTest(wide=wide, tele=tele, default=default), self.assertRaises(ProfileError):
+                self.validate(lens_type="zoom", focal_length_source="zoom_range",
+                              focal_length_min_mm=wide, focal_length_max_mm=tele,
+                              focal_length_default_mm=default)
+
+    def test_variable_aperture_zoom_deferred(self):
+        with self.assertRaisesRegex(ProfileError, "constant-aperture"):
+            self.validate(lens_type="zoom", focal_length_source="zoom_range",
+                          focal_length_min_mm=80, focal_length_max_mm=200,
+                          focal_length_default_mm=80, aperture_max_tele_f=2.8)
 
     def test_unequal_prime_range_rejected(self):
         with self.assertRaisesRegex(ProfileError, "identical"):

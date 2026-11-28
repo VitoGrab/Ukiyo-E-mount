@@ -195,9 +195,13 @@ static uint16_t profile_sum(const uint8_t *p, unsigned n)
     return sum;
 }
 
-static uint8_t profile_bcd2(unsigned n)
+/* Decode two packed BCD bytes; invalid digits cannot represent a focal length. */
+static int profile_focal_bcd(const uint8_t *p)
 {
-    return (uint8_t)(((n / 10u % 10u) << 4) | (n % 10u));
+    unsigned a = p[0] >> 4, b = p[0] & 15u;
+    unsigned c = p[1] >> 4, d = p[1] & 15u;
+    if (a > 9u || b > 9u || c > 9u || d > 9u) return -1;
+    return (int)(1000u * a + 100u * b + 10u * c + d);
 }
 
 uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
@@ -226,12 +230,21 @@ uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
     unsigned focal = profile_u16(status + 30);
     unsigned max = profile_u16(spec + 6), min = profile_u16(spec + 8);
     unsigned now = profile_u16(status + 6);
+    int wide = profile_focal_bcd(spec + 22);
+    int tele = profile_focal_bcd(spec + 24);
+    if (wide < 1 || wide > 500 || tele < 0 || tele > 500) return 0;
+    if (tele == 0) {
+        if (focal != (unsigned)wide * 10u || spec[27] != 0u) return 0;
+    } else {
+        /* Stage 6A: constant maximum aperture and fixed reported focal. */
+        if (tele <= wide || focal < (unsigned)wide * 10u ||
+            focal > (unsigned)tele * 10u || spec[27] != spec[26]) return 0;
+    }
     if (focal < 10u || focal > 5000u || focal % 10u ||
         profile_u16(status + 32) != focal ||
         profile_u16(capture + 10) != focal || profile_u16(capture + 12) != focal ||
         profile_u16(capture35 + 10) != focal || profile_u16(capture35 + 12) != focal ||
-        spec[22] != profile_bcd2(focal / 1000u) || spec[23] != profile_bcd2(focal / 10u) ||
-        spec[24] || spec[25] || spec[27] || capture[15] || capture[16] ||
+        capture[15] || capture[16] ||
         capture35[15] || capture35[16] ||
         max < 4096u || max > now || now > 5719u || now > min || min > 7168u ||
         profile_u16(status + 8) != now || profile_u16(iris + 6) != now ||

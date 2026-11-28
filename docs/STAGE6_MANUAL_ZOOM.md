@@ -1,6 +1,6 @@
 # Stage 6 — manual zoom profiles
 
-Status: planned. Baseline: v0.5.0, commit `4ea6d53286bc0990f38eb57011043ad0ad3f1e12`. Target milestone: v0.6.0 after acceptance, not a version bump at entry. Tracking: [#5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5). Sensor-based ring measurement is separate future research ([#6](https://github.com/VitoGrab/Ukiyo-E-mount/issues/6)). Cross-body compatibility follows Stage 6.
+Status: 6A implementation available on `feature/manual-zoom` (v0.5.1); hardware acceptance pending. Baseline: v0.5.0, commit `4ea6d53286bc0990f38eb57011043ad0ad3f1e12`. Target milestone: v0.6.0 after acceptance, not a version bump at entry. Tracking: [#5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5). Sensor-based ring measurement is separate future research ([#6](https://github.com/VitoGrab/Ukiyo-E-mount/issues/6)). Cross-body compatibility follows Stage 6.
 
 ## Reference hardware and scope
 
@@ -33,8 +33,8 @@ Goal: use the body aperture dial as a virtual focal-length selector without addi
 
 ### Separate physical optics, selector and capture metadata
 
-- Preserve physical lens specifications independently of the selector: Arsat 80–200 mm, constant maximum f/4.5, physical minimum f/22. Do not alter the catalog's real aperture range.
-- Explore a deliberately wider virtual aperture range than the physical lens offers, using the actual limits and step positions accepted by a6000. Start by testing candidate f/1.0–f/64 limits, then narrow to the reliably usable range if necessary; these are experimental bounds, not confirmed body support. Identify which 0x08 and 0x05 fields control the selectable range versus lens nameplate aperture metadata. Keep these consistent where required by the body, and verify whether physical nameplate fields can remain intact.
+- Preserve physical lens specifications independently of the selector: Arsat 80–200 mm, constant maximum f/4.5, physical minimum f/22. Keep the existing JSON schema and real aperture range. Compute virtual selector bounds in the preparation/generation tools rather than replacing physical aperture values in the catalog.
+- Explore a deliberately wider virtual aperture range than the physical lens offers, using the actual limits and step positions accepted by a6000. Start by testing candidate f/1.0–f/64 limits and investigate sub-f/1.0 (e.g. f/0.85, negative photographic AV) only after confirming the wire encoding and body support, then narrow to the reliably usable range if necessary; these are experimental bounds, not confirmed body support. Identify which 0x08 and 0x05 fields control the selectable range versus lens nameplate aperture metadata. Keep these consistent where required by the body, and verify whether physical nameplate fields can remain intact.
 - Select practical focal increments (prefer 5 mm where the number of distinct stable selector positions permits, otherwise 10 mm or a documented coarser mapping). Both endpoints must be reachable. Do not invent additional positions or make the mapping depend on a linear f-number scale. For Arsat, 80–200 mm needs 25 positions at 5 mm or 13 at 10 mm. Avoid redundant adjacent selector values where possible; verify all displayed positions and both dial directions.
 - Maintain a separate capture aperture reference, initially the physical maximum aperture at the selected focal length (f/4.5 throughout Arsat's range). This is a nominal reference, not a measurement of the mechanical iris. A future calibrated aperture input can replace it.
 
@@ -68,3 +68,7 @@ Do not change other catalog lenses' optical specifications without evidence. Ver
 - [0x28 capture](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x28.md), [0x35](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x35.md)
 - [0x03 body aperture commands](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x03.md), [0x1B capture aperture](https://github.com/weiziqian/E-mount-protocol-RE/blob/main/docs/msg_0x1B.md)
 - [Existing profile format](LENS_PROFILES.md), [Flash programming](PROFILE_FLASH.md).
+
+## 6A implementation notes (v0.5.1)
+
+The v1 559-byte layout already carries both BCD focal endpoints and both nameplate maximum apertures. Constant-aperture zooms now use these existing fields, with equal default focal values in status and capture templates. The four catalog zooms are generated and selectable; variable-aperture zooms are deliberately rejected at this stage. No runtime focal selection, USB default prompt or virtual aperture range is introduced. Prime binaries are unchanged. The maintainer will first test Arsat at 80 mm. Hardware and build acceptance remain pending.

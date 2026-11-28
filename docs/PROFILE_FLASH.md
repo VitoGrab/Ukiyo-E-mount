@@ -28,7 +28,7 @@ python3 tools/upload_lens_profile.py --port /dev/ttyACM0 --detached --read /tmp/
 
 For `--info`, the host reads back the validated Flash image and decodes the lens model directly from message 0x3F. A missing/invalid stored profile reports `PROFILE_LENS_MODEL=NONE` and indicates the embedded fallback. No firmware change or new protocol command is needed.
 
-The VS Code task `Ukiyo: Upload Lens Profile` runs `prepare_lens_profiles.py` through the uploader's `--select` mode, then presents the freshly prepared prime profiles in a numbered terminal menu and requests physical camera detachment confirmation [y/N]. It uses the PlatformIO Python interpreter. Catalog additions require no task configuration edits.
+The VS Code task `Ukiyo: Upload Lens Profile` runs `prepare_lens_profiles.py` through the uploader's `--select` mode, then presents the freshly prepared supported profiles in a numbered terminal menu and requests physical camera detachment confirmation [y/N]. It uses the PlatformIO Python interpreter. Catalog additions require no task configuration edits.
 
 The tool requires pyserial; use the PlatformIO Python environment if it is unavailable. It sends `x` to disable auto-arm, then checks NVM information. The device refuses profile commands unless USB CDC is open and both camera modes are stopped. Before programming it requires 20 consecutive idle checks and checks geometry, absolute linker bounds, EEPROM fuse and region lock. The fuse must indicate no EEPROM reservation; it never changes fuses or unlocks regions. Since v0.5.0, A0 is not a programming interlock: direct 3V3 wiring makes it high even on USB alone. Physical camera detachment is mandatory; software cannot verify it from A0.
 
@@ -109,7 +109,7 @@ CAMERA_EMULATION=ARMED
 - A subsequent independent `--info` returned `PROFILE_VALID=1` and `PROFILE_LENS_MODEL=PENTACON 200mm f4`. The maintainer confirmed the new profile on the camera.
 - Rubinar 500 mm f/5.6 fixed-aperture profile was also checked on the camera; aperture remained f/5.6 and could not be changed.
 
-The implemented prime-profile workflow is accepted on the tested XIAO/a6000 configuration. The exact installed BOSSA 1.9 package revision, production build hardware regression, full host test suite, cold-start timing, interrupted-write tests and other camera models remain outside this reported acceptance. Zoom profiles remain unsupported (issue #5).
+The implemented prime-profile workflow is accepted on the tested XIAO/a6000 configuration. The exact installed BOSSA 1.9 package revision, production build hardware regression, full host test suite, cold-start timing, interrupted-write tests and other camera models remain outside this reported acceptance. Stage 6A constant-aperture zoom profiles use the same USB transfer format; camera validation is pending (issue #5).
 
 ### Current workflow
 

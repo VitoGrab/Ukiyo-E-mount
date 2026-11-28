@@ -11,7 +11,7 @@ import zlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from prepare_lens_profiles import CONFIG, load_profile, load_catalog
-from generate_lens_profile import build_profile
+from generate_lens_profile import build_profile, av
 
 @unittest.skipUnless(shutil.which('cc'), 'Native C compiler unavailable')
 class BinaryProfileTests(unittest.TestCase):
@@ -43,7 +43,10 @@ class BinaryProfileTests(unittest.TestCase):
             # loader must reject them even when CRC is correct.
             for name, start, length, offset, value in (
                 ('wrong-id', 16, 105, 5, 6),
-                ('zoom', 16 + 148, 210, 25, 0x85),
+                ('missing-tele-aperture', 16 + 148, 210, 25, 0x85),
+                ('invalid-bcd', 16 + 148, 210, 23, 0xfa),
+                ('reversed-range', 16 + 148, 210, 25, 0x20),
+                ('prime-tele-aperture', 16 + 148, 210, 27, 0x20),
                 ('identity', 16 + 105, 43, 11, 99),
                 ('focal-mismatch', 16 + 377, 44, 10, 1),
             ):
@@ -56,6 +59,29 @@ class BinaryProfileTests(unittest.TestCase):
                 path.write_bytes(invalid)
                 paths.append(str(path))
             subprocess.run([str(exe), *paths], cwd=ROOT, check=True)
-            primes = [str(CONFIG.parent / (p['profile_id'] + '.bin'))
-                      for p in load_catalog().values() if p['lens_type'] == 'prime']
-            subprocess.run([str(exe), '--catalog', *primes], cwd=ROOT, check=True)
+            catalog = load_catalog()
+            profiles = [str(CONFIG.parent / (p['profile_id'] + '.bin'))
+                        for p in catalog.values()]
+            subprocess.run([str(exe), '--catalog', *profiles], cwd=ROOT, check=True)
+            arsat = catalog['arsat-m-80-200-4-5']
+            for mm in (80, 135, 200):
+                zoom = build_profile(dict(arsat, focal_length_default_mm=mm))
+                path = tmp / f'arsat-{mm}.bin'
+                path.write_bytes(zoom)
+                subprocess.run([str(exe), '--arsat', str(path), str(mm * 10),
+                                str(av(4.5)), str(av(22))], cwd=ROOT, check=True)
+            for name, offset, value in (
+                ('outside-range', 23, 0x90),
+                ('bad-tele-bcd', 24, 0x2a),
+                ('variable-tele', 27, 0x56),
+            ):
+                invalid = bytearray(build_profile(arsat))
+                start, length = 16 + 148, 210
+                invalid[start + offset] = value
+                struct.pack_into('<H', invalid, start + length - 3,
+                                 sum(invalid[start + 1:start + length - 3]) & 0xffff)
+                struct.pack_into('<I', invalid, 8, zlib.crc32(invalid[16:]))
+                path = tmp / (name + '.bin')
+                path.write_bytes(invalid)
+                paths.append(str(path))
+            subprocess.run([str(exe), *paths], cwd=ROOT, check=True)

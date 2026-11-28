@@ -7,7 +7,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* Fixed-layout prime profile v1. Validation and staging only while bus idle.
+/* Fixed-layout prime/constant-aperture zoom profile v1. Validation and staging only while bus idle.
  * Invalid staging leaves the previously selected profile unchanged. */
 uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size);
 uint8_t ukiyo_profile_stage(const uint8_t *image, unsigned size);

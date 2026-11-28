@@ -2349,7 +2349,7 @@ void em_init(void)
 {
 	em_t_init_done = 0;
 	uint32_t ukiyo_boot_start_ms = millis();
-	/* Apply the selected prime profile before enabling the bus. */
+	/* Apply the selected lens profile before enabling the bus. */
 	ukiyo_profile_apply();
 	ukiyo_mf_init_profile();
 

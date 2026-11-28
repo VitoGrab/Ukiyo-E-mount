@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate independent prime-lens BINs from a JSON catalog."""
+"""Generate independent prime and constant-aperture zoom BINs from a JSON catalog."""
 from __future__ import annotations
 import argparse
 import json
@@ -46,9 +46,12 @@ def build_profile(p):
         put16(frames[key], offset, mm * 10)
         put16(frames[key], offset + 2, mm * 10)
     spec = frames['08']
-    spec[22:26] = bytes((bcd(mm // 100), bcd(mm), 0, 0))
+    wide = p['focal_length_min_mm']
+    tele = p['focal_length_max_mm'] if p['lens_type'] == 'zoom' else 0
+    spec[22:26] = bytes((bcd(wide // 100), bcd(wide),
+                         bcd(tele // 100), bcd(tele)))
     spec[26] = BCD_APERTURES[min(19, ((maximum - 4096) * 3 + 128) // 256)]
-    spec[27] = 0
+    spec[27] = spec[26] if tele else 0
     put16(spec, 6, maximum)
     put16(spec, 8, minimum)
     for key in ('05', '1b'):
@@ -80,7 +83,7 @@ def fallback_header(data):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--catalog', type=pathlib.Path, default=CONFIG)
-    parser.add_argument('--profile-id', help='Generate one supported profile instead of all primes')
+    parser.add_argument('--profile-id', help='Generate one supported profile instead of the complete catalog')
     parser.add_argument('--output-dir', type=pathlib.Path,
                         help='Defaults to the catalog directory')
     parser.add_argument('--verify-only', action='store_true',
@@ -92,14 +95,9 @@ def main():
         if args.profile_id is not None:
             selected = [select_profile(profiles, args.profile_id)]
         else:
-            selected = [p for p in profiles.values() if p['lens_type'] == 'prime']
-            for p in profiles.values():
-                if p['lens_type'] == 'zoom':
-                    print(f"SKIP={p['profile_id']} REASON=zoom unsupported (issue #5)")
-                    if (output_dir / (p['profile_id'] + '.bin')).exists():
-                        raise ProfileError(f"Unexpected zoom BIN: {p['profile_id']}")
+            selected = list(profiles.values())
         if not selected:
-            raise ProfileError('No supported prime profiles selected')
+            raise ProfileError('No supported profiles selected')
         # Validate and encode everything before writing anything.
         artifacts = [(output_dir / (p['profile_id'] + '.bin'), build_profile(p))
                      for p in selected]

@@ -1,6 +1,6 @@
 # Lens profiles
 
-The single editable source is [profiles.json](profiles.json), an array of lens records. Each supported entry generates `<profile_id>.bin`. The initial catalog contains 16 primes and four reserved zoom entries supplied by the maintainer. Specifications are catalog inputs, not individually hardware-verified; check your exact lens variant.
+The single editable source is [profiles.json](profiles.json), an array of lens records. Each supported entry generates `<profile_id>.bin`. The initial catalog contains 16 primes and four constant-aperture zoom entries supplied by the maintainer. Specifications are catalog inputs, not individually hardware-verified; check your exact lens variant.
 
 Prepare all supported profiles, embedded fallback and firmware identity from the repository root (also performed by the Build & Upload and interactive Upload Lens Profile tasks):
 
@@ -15,7 +15,7 @@ python3 tools/generate_lens_profile.py --profile-id hanimex-135-f2-8
 python3 tools/generate_lens_profile.py --verify-only
 ```
 
-Zoom entries are retained for future support (issue #5) and skipped explicitly in batch mode; selecting one directly fails. No zoom BIN is produced. IDs must be unique lowercase kebab-case. The shared `base_packets.json` is the generator's protocol template input, not a lens record. Generation does not modify firmware.
+Stage 6A generates the four constant-aperture zoom BINs and makes them selectable in the uploader. Focal length is the catalog default; dynamic selection is deferred (issue #5). Variable-aperture zooms are not supported in this stage. IDs must be unique lowercase kebab-case. The shared `base_packets.json` is the generator's protocol template input, not a lens record. Generation does not modify firmware.
 
 The firmware uses the embedded Helios fallback if no valid image is found in the reserved Flash region. Independent USB CDC programming, Helios/Hanimex switching, Pentacon programming with automatic reset, and Rubinar fixed-aperture behavior were validated by the maintainer on a6000; see [Flash programming](../docs/PROFILE_FLASH.md). See [format and validation](../docs/LENS_PROFILES.md).
 
@@ -44,4 +44,4 @@ The initial 20 records were cross-checked against catalogues and published lens 
 | asahi-smc-takumar-85-210-4-5 | [Pentax ES manual](https://www.manualowl.com/m/Pentax/ES/Manual/184049?page=41); f/4.5–22. |
 | arsat-m-80-200-4-5 | [M42 Arsat review](https://radojuva.com/en/2011/01/obzor-arsat-80-200-granit-11/) and [related Arsat H specifications](https://ussrphoto.com/modern/Wiki/default.asp?ContentID=1294&ParentID=2&WikiCatID=28); constant f/4.5, f/22 endpoint. |
 
-The review confirms nominal lens specifications, not the accuracy of Sony E-mount reporting. Zoom BINs are still intentionally not generated.
+The review confirms nominal lens specifications, not the accuracy of Sony E-mount reporting. Zoom BINs are experimental until camera validation.

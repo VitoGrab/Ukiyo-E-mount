@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare the complete prime-lens library, embedded fallback and firmware identity."""
+"""Prepare the complete supported lens library, embedded fallback and firmware identity."""
 from __future__ import annotations
 import argparse
 import json
@@ -26,7 +26,7 @@ def read_json(path: pathlib.Path):
         raise ProfileError(f'Cannot read profile {path}: {exc}') from exc
 
 
-def validate_profile(p: dict, *, allow_zoom: bool = False) -> dict:
+def validate_profile(p: dict, *, allow_zoom: bool = True) -> dict:
     keys = {'profile_id', 'lens_model', 'sony_lens_id', 'lens_type', 'focal_length_min_mm',
             'focal_length_max_mm', 'focal_length_default_mm', 'focal_length_source',
             'aperture_max_f', 'aperture_max_tele_f', 'aperture_min_f', 'aperture_now_f'}
@@ -45,7 +45,7 @@ def validate_profile(p: dict, *, allow_zoom: bool = False) -> dict:
         raise ProfileError('sony_lens_id must be 0..65535 integer')
     kind = p['lens_type']
     if kind != 'prime' and not (allow_zoom and kind == 'zoom'):
-        raise ProfileError('Only prime lenses are supported; see issue #5')
+        raise ProfileError('Unsupported lens type (or zoom disabled)')
     if kind == 'prime' and p['focal_length_source'] != 'fixed':
         raise ProfileError('Prime lenses require focal_length_source=fixed')
     if kind == 'zoom' and p['focal_length_source'] != 'zoom_range':
@@ -77,7 +77,9 @@ def validate_profile(p: dict, *, allow_zoom: bool = False) -> dict:
         raise ProfileError('Require 1 <= max aperture opening <= now <= min aperture opening <= 64')
     if not 1.0 <= tele <= narrow:
         raise ProfileError('Tele maximum aperture outside supported range')
-    if kind == 'prime' and reported > 9.0:
+    if kind == 'zoom' and wide != tele:
+        raise ProfileError('Stage 6A supports constant-aperture zooms only')
+    if reported > 9.0:
         raise ProfileError('EM_F_BCD nameplate table supports up to f/9 for NOW; adapt table before increasing')
     return p
 
@@ -172,10 +174,7 @@ def prepare_profiles(*, verify_only=False):
     """
     from generate_lens_profile import build_profile, fallback_header
     catalog = load_catalog()
-    selected = [p for p in catalog.values() if p['lens_type'] == 'prime']
-    for p in catalog.values():
-        if p['lens_type'] == 'zoom' and (CONFIG.parent / (p['profile_id'] + '.bin')).exists():
-            raise ProfileError(f"Unexpected unsupported zoom BIN: {p['profile_id']}")
+    selected = list(catalog.values())
     expected = {CONFIG.parent / (p['profile_id'] + '.bin'): build_profile(p)
                 for p in selected}
     if DEFAULT_BIN not in expected:

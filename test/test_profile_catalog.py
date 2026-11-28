@@ -18,15 +18,9 @@ class CatalogTests(unittest.TestCase):
         for key, p in catalog.items():
             path = CONFIG.parent / (key + '.bin')
             with self.subTest(profile=key):
-                if p['lens_type'] == 'zoom':
-                    self.assertFalse(path.exists())
-                    with self.assertRaises(ProfileError):
-                        build_profile(p)
-                    with self.assertRaises(ProfileError):
-                        select_profile(catalog, key)
-                else:
-                    expected.add(path)
-                    self.assertEqual(path.read_bytes(), build_profile(p))
+                expected.add(path)
+                self.assertEqual(path.read_bytes(), build_profile(p))
+                self.assertEqual(select_profile(catalog, key), p)
         self.assertEqual(set(CONFIG.parent.glob('*.bin')), expected)
 
     def test_duplicate_and_unsafe_id(self):
@@ -44,14 +38,13 @@ class CatalogTests(unittest.TestCase):
             output = pathlib.Path(d)
             result = subprocess.run(cmd + ['--output-dir', d], capture_output=True, text=True, check=True)
             catalog = load_catalog()
-            primes = {key + '.bin' for key, p in catalog.items() if p['lens_type'] == 'prime'}
-            self.assertEqual({p.name for p in output.glob('*.bin')}, primes)
-            self.assertIn(f'PROFILES_GENERATED={len(primes)}', result.stdout)
+            expected = {key + '.bin' for key in catalog}
+            self.assertEqual({p.name for p in output.glob('*.bin')}, expected)
+            self.assertIn(f'PROFILES_GENERATED={len(expected)}', result.stdout)
             subprocess.run(cmd + ['--output-dir', d, '--verify-only'], check=True, capture_output=True)
             zoom = next(key for key, p in catalog.items() if p['lens_type'] == 'zoom')
-            result = subprocess.run(cmd + ['--output-dir', d, '--profile-id', zoom],
-                                    capture_output=True, text=True)
-            self.assertNotEqual(result.returncode, 0)
+            subprocess.run(cmd + ['--output-dir', d, '--profile-id', zoom],
+                           check=True, capture_output=True)
             single = output / 'single'
             subprocess.run(cmd + ['--output-dir', str(single), '--profile-id', 'helios-44m-4'],
                            check=True, capture_output=True)

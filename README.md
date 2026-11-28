@@ -17,7 +17,7 @@ to other lenses including zoom lenses.
 
 ### Development stages
 
-Stage numbers describe work packages; firmware versions identify actual code milestones. New releases use three-component versions (e.g. v0.5.0); historical compact labels refer to the original development milestones. Current milestone: **v0.5.0**, standalone camera-powered prototype with the direct-power profile-maintenance correction included. The pre-release power and sleep build was functionally validated on Sony a6000; final regression remains open. See [v0.5.0 release notes](docs/releases/v0.5.0.md).
+Stage numbers describe work packages; firmware versions identify actual code milestones. New releases use three-component versions (e.g. v0.5.0); historical compact labels refer to the original development milestones. Latest release milestone: **v0.5.0**, standalone camera-powered prototype with the direct-power profile-maintenance correction included. The pre-release power and sleep build was functionally validated on Sony a6000; final regression remains open. See [v0.5.0 release notes](docs/releases/v0.5.0.md).
 
 | Stage | Deliverable | Exit criterion | Status |
 |---|---|---|---|
@@ -90,13 +90,13 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the project version and E-mount protocol revision.
 
-- The current project version is `0.5.0`. For `0.MINOR.PATCH`, MINOR maps to the Sony firmware major byte and PATCH to the suffix byte: `0.4.11` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5.0` -> `pl[6]=0x05`, `pl[5]=0x00`. The historic `0.411` label corresponds to `0.4.11`.
-- The suffix occupies one byte (0–255). The generated v0.5.0 identity is expected to render as `Ver.05.000`; the historical v0.411 identity was expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
+- The current development project version is `0.5.1` (Stage 6A). For `0.MINOR.PATCH`, MINOR maps to the Sony firmware major byte and PATCH to the suffix byte: `0.4.11` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5.0` -> `pl[6]=0x05`, `pl[5]=0x00`. The historic `0.411` label corresponds to `0.4.11`.
+- The suffix occupies one byte (0–255). The generated v0.5.1 identity is expected to render as `Ver.05.001`; the historical v0.411 identity was expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
 - `tools/prepare_lens_profiles.py` derives both firmware bytes from `project_version`, generates firmware identity constants; the engine inserts them into message `0x07` and recalculates its checksum at initialization. There is no separate firmware-version override or duplicate version field.
 - `--verify-only` checks that all supported BINs, fallback header and firmware identity header match their sources.
-- Monitor startup, `h` help and status output use the generated `v0.5.0` label; there is no separate version command.
+- Monitor startup, `h` help and status output use the generated `v0.5.1` label; there is no separate version command.
 
 ### Stages 4.6.2–4.7: powerbank validation and cleanup
 
@@ -238,3 +238,7 @@ See [release notes](docs/releases/v0.5.0.md) and [Stage 5 evidence](docs/STAGE5_
 ### v0.5.0 direct-power profile programming fix
 
 A0 no longer blocks USB profile programming, because direct 3V3 wiring energizes the sense divider from USB. The bus must be stopped and the camera physically detached. The interactive picker uses `[y/N]` confirmation and terminal-height pagination. The default uploader leaves the verified profile in Flash and the emulator OFF until USB is unplugged; no automatic reset on direct-power wiring. Runtime handshake and sleep behavior are unchanged. See [profile programming](docs/PROFILE_FLASH.md).
+
+### Stage 6A development — v0.5.1
+
+This branch adds constant-aperture manual zoom identity and catalog-default focal reporting, retaining v1 profile compatibility for primes. The four catalog zoom profiles are experimental until hardware acceptance. See [Stage 6 plan](docs/STAGE6_MANUAL_ZOOM.md). No aperture-based focal control or runtime selection yet.

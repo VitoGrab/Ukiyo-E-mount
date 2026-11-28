@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "lens_profile.h"
 #include "emount_packets.h"
@@ -39,6 +40,27 @@ static void check(unsigned focal, unsigned id, unsigned maximum,
 int main(int argc, char **argv) {
     uint8_t image[UKIYO_PROFILE_SIZE], snapshot[EM_LEN_01];
     memcpy(snapshot, em_msg_01, sizeof(snapshot));
+    if (argc == 6 && strcmp(argv[1], "--arsat") == 0) {
+        read_image(argv[2], image);
+        assert(ukiyo_profile_validate(image, sizeof(image)));
+        assert(ukiyo_profile_stage(image, sizeof(image)));
+        ukiyo_profile_apply();
+        unsigned focal = (unsigned)strtoul(argv[3], NULL, 10);
+        unsigned maximum = (unsigned)strtoul(argv[4], NULL, 10);
+        unsigned minimum = (unsigned)strtoul(argv[5], NULL, 10);
+        assert(u16(em_msg_05 + 30) == focal && u16(em_msg_05 + 32) == focal);
+        assert(u16(em_msg_28 + 10) == focal && u16(em_msg_28 + 12) == focal);
+        assert(u16(em_msg_35 + 10) == focal && u16(em_msg_35 + 12) == focal);
+        assert(em_msg_08[22] == 0x00 && em_msg_08[23] == 0x80);
+        assert(em_msg_08[24] == 0x02 && em_msg_08[25] == 0x00);
+        assert(em_msg_08[26] == 0x45 && em_msg_08[27] == 0x45);
+        assert(u16(em_msg_08 + 6) == maximum && u16(em_msg_08 + 8) == minimum);
+        assert(u16(em_msg_05 + 6) == maximum && u16(em_msg_1B + 6) == maximum);
+        assert(strcmp((const char *)em_msg_3F + 7, "ARSAT M 80-200mm f4.5") == 0);
+        assert(memcmp(snapshot, em_msg_01, sizeof(snapshot)) == 0);
+        puts("ARSAT_PROFILE=PASS");
+        return 0;
+    }
     if (argc > 1 && strcmp(argv[1], "--catalog") == 0) {
         for (int i = 2; i < argc; ++i) {
             read_image(argv[i], image);
