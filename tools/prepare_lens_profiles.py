@@ -10,6 +10,8 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = ROOT / 'profiles' / 'profiles.json'
+FOCAL_MAPS = CONFIG.parent / 'focal_length_maps.json'
+FOCAL_MAP_HEADER = ROOT / 'include/emount/focal_length_maps.h'
 DEFAULT_PROFILE_ID = 'helios-44m-4'
 DEFAULT_BIN = CONFIG.parent / (DEFAULT_PROFILE_ID + '.bin')
 IDENTITY = ROOT / 'config' / 'protocol_identity.json'
@@ -26,10 +28,62 @@ def read_json(path: pathlib.Path):
         raise ProfileError(f'Cannot read profile {path}: {exc}') from exc
 
 
+def load_focal_maps() -> dict:
+    maps = read_json(FOCAL_MAPS)
+    if not isinstance(maps, dict) or set(maps) != {'standard', 'telephoto'}:
+        raise ProfileError('Expected standard and telephoto focal maps')
+    for key, endpoints in (('standard', (20, 210)), ('telephoto', (35, 600))):
+        values = maps[key]
+        if (not isinstance(values, list) or len(values) != 40 or
+                any(type(v) is not int for v in values) or
+                any(a >= b for a, b in zip(values, values[1:])) or
+                (values[0], values[-1]) != endpoints):
+            raise ProfileError(f'Invalid focal map: {key}')
+    return maps
+
+
+def selector_raw(index: int) -> int:
+    if type(index) is not int or not 0 <= index < 40:
+        raise ProfileError('Selector index must be 0..39')
+    return 0x1000 + index * 256 // 3
+
+
+def selector_bounds(p: dict) -> tuple[int, int, int]:
+    """Return virtual wide, narrow and default aperture RAWs for an AZ record."""
+    maps = load_focal_maps()
+    key = p.get('focal_length_map')
+    if not isinstance(key, str) or key not in maps:
+        raise ProfileError('Aperture zoom requires standard or telephoto focal_length_map')
+    expected = 'standard' if p['focal_length_max_mm'] <= 210 else 'telephoto'
+    if key != expected:
+        raise ProfileError(f'Expected {expected} focal map for this range')
+    values = maps[key]
+    try:
+        return tuple(selector_raw(values.index(p[k])) for k in (
+            'focal_length_min_mm', 'focal_length_max_mm', 'focal_length_default_mm'))
+    except ValueError as exc:
+        raise ProfileError('Focal map must contain both endpoints and default exactly') from exc
+
+
+def render_focal_map_header(maps: dict) -> str:
+    lines = ['#pragma once', '', '#include <stdint.h>',
+             '/* Generated from profiles/focal_length_maps.json. */',
+             '#define UKIYO_FOCAL_MAP_SIZE 40u']
+    for key in ('standard', 'telephoto'):
+        lines.append(f'static const uint16_t ukiyo_focal_map_{key}[UKIYO_FOCAL_MAP_SIZE] = {{')
+        values = maps[key]
+        for i in range(0, len(values), 10):
+            lines.append('    ' + ', '.join(str(v) for v in values[i:i+10]) + ',')
+        lines.append('};')
+    return '\n'.join(lines) + '\n'
+
+
 def validate_profile(p: dict, *, allow_zoom: bool = True) -> dict:
     keys = {'profile_id', 'lens_model', 'sony_lens_id', 'lens_type', 'focal_length_min_mm',
             'focal_length_max_mm', 'focal_length_default_mm', 'focal_length_source',
             'aperture_max_f', 'aperture_max_tele_f', 'aperture_min_f', 'aperture_now_f'}
+    if isinstance(p, dict) and p.get('focal_length_source') == 'aperture_zoom':
+        keys.add('focal_length_map')
     if not isinstance(p, dict) or set(p) != keys:
         raise ProfileError(f'Expected exactly these keys: {sorted(keys)}')
     if not isinstance(p['profile_id'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', p['profile_id']):
@@ -48,13 +102,14 @@ def validate_profile(p: dict, *, allow_zoom: bool = True) -> dict:
         raise ProfileError('Unsupported lens type (or zoom disabled)')
     if kind == 'prime' and p['focal_length_source'] != 'fixed':
         raise ProfileError('Prime lenses require focal_length_source=fixed')
-    if kind == 'zoom' and p['focal_length_source'] not in ('zoom_range', 'zoom_aperture'):
-        raise ProfileError('Catalog zoom entries require zoom_range or zoom_aperture')
+    if kind == 'zoom' and p['focal_length_source'] not in ('default_zoom', 'aperture_zoom'):
+        raise ProfileError('Catalog zoom entries require default_zoom or aperture_zoom')
     focal_keys = ('focal_length_min_mm', 'focal_length_max_mm', 'focal_length_default_mm')
     for key in focal_keys:
         mm = p[key]
-        if type(mm) is not int or not 1 <= mm <= 500:
-            raise ProfileError(f'{key} must be an integer from 1 to 500')
+        limit = 500 if kind == 'prime' else 600
+        if type(mm) is not int or not 1 <= mm <= limit:
+            raise ProfileError(f'{key} must be an integer from 1 to {limit}')
     if kind == 'prime' and len({p[key] for key in focal_keys}) != 1:
         raise ProfileError('Prime lenses require identical minimum, maximum and default focal lengths')
     if kind == 'zoom' and not (p['focal_length_min_mm'] < p['focal_length_max_mm'] and
@@ -77,8 +132,10 @@ def validate_profile(p: dict, *, allow_zoom: bool = True) -> dict:
         raise ProfileError('Require 1 <= max aperture opening <= now <= min aperture opening <= 64')
     if not 1.0 <= tele <= narrow:
         raise ProfileError('Tele maximum aperture outside supported range')
-    if kind == 'zoom' and wide != tele:
-        raise ProfileError('Stage 6A supports constant-aperture zooms only')
+    if kind == 'zoom' and p['focal_length_source'] == 'default_zoom' and wide != tele:
+        raise ProfileError('Default zoom currently supports constant-aperture zooms only')
+    if p['focal_length_source'] == 'aperture_zoom':
+        selector_bounds(p)
     if reported > 9.0:
         raise ProfileError('EM_F_BCD nameplate table supports up to f/9 for NOW; adapt table before increasing')
     return p
@@ -180,6 +237,7 @@ def prepare_profiles(*, verify_only=False):
     if DEFAULT_BIN not in expected:
         raise ProfileError('Missing supported embedded fallback profile')
     expected[VERSION_HEADER] = render_version_header(load_identity(IDENTITY)).encode()
+    expected[FOCAL_MAP_HEADER] = render_focal_map_header(load_focal_maps()).encode()
     expected[ROOT / 'include/emount/default_lens_profile.h'] = fallback_header(expected[DEFAULT_BIN]).encode()
     changed = 0
     for path, data in expected.items():

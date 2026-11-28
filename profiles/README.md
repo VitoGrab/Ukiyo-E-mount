@@ -47,3 +47,7 @@ The initial 20 records were cross-checked against catalogues and published lens 
 The review confirms nominal lens specifications, not the accuracy of Sony E-mount reporting. Zoom BINs are experimental until camera validation.
 
 Stage 6C adds one experimental Arsat aperture-zoom record (`arsat-m-80-200-4-5-aperture`). The physical optical record is identical to the default zoom; the generator now advertises an experimental f/0.707–f/128 aperture range only in the aperture-zoom BIN (previous f/1–f/64 range was tested on a6000). The current focal length remains 80 mm until dynamic selection is implemented and validated. The v1 BIN does not carry an independent runtime mode flag. Existing IDs and non-experimental BINs are unchanged; the interactive picker labels default and aperture zoom separately.
+
+### Approved selector maps
+
+The 23-entry catalog now contains 16 primes, four default zooms ([DZ], `default_zoom`), and three aperture-zoom profiles ([AZ], `aperture_zoom`), of which Sigma 21–35 and Takumar 135–600 are marked [TEST]. The previous experimental Arsat BIN is replaced with the constrained 80–200 mm standard map subrange. See [the approved maps and profile rules](../docs/FOCAL_LENGTH_MAPS.md). The current zoom remains fixed at the catalog default in AZ; test labels are not claims of hardware acceptance. The physical values in the catalog are unchanged for the existing lenses. DZ profile IDs are unchanged.

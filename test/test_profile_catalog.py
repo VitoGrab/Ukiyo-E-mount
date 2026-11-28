@@ -8,7 +8,8 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from prepare_lens_profiles import CONFIG, ProfileError, load_catalog, select_profile
+from prepare_lens_profiles import (CONFIG, ProfileError, load_catalog, select_profile,
+                                   load_focal_maps, render_focal_map_header, FOCAL_MAP_HEADER)
 from generate_lens_profile import build_profile
 
 class CatalogTests(unittest.TestCase):
@@ -28,20 +29,44 @@ class CatalogTests(unittest.TestCase):
         catalog = load_catalog()
         default = catalog['arsat-m-80-200-4-5']
         probe = catalog['arsat-m-80-200-4-5-aperture']
-        self.assertEqual(probe['focal_length_source'], 'zoom_aperture')
-        self.assertEqual(default, dict(probe, profile_id=default['profile_id'],
-                                       focal_length_source='zoom_range',
-                                       lens_model=default['lens_model']))
+        self.assertEqual(probe['focal_length_source'], 'aperture_zoom')
+        common = dict(probe, profile_id=default['profile_id'],
+                      focal_length_source='default_zoom', lens_model=default['lens_model'])
+        del common['focal_length_map']
+        self.assertEqual(default, common)
         image = build_profile(probe)
         spec = 16 + 148
-        self.assertEqual(struct.unpack_from('<HH', image, spec + 6), (0x0F00, 0x1E00))
-        self.assertEqual(image[spec + 22:spec + 28], bytes.fromhex('00 80 02 00 07 07'))
+        self.assertEqual(struct.unpack_from('<HH', image, spec + 6), (0x14AA, 0x1CAA))
+        self.assertEqual(image[spec + 22:spec + 28], bytes.fromhex('00 80 02 00 50 50'))
         self.assertEqual(struct.unpack_from('<HH', image, 16 + 30), (800, 800))
-        self.assertEqual(struct.unpack_from('<HH', image, 16 + 6), (0x0F00, 0x0F00))
-        self.assertEqual([image[16 + i] for i in (50, 52, 57, 58)], [0, 0, 0, 120])
+        self.assertEqual(struct.unpack_from('<HH', image, 16 + 6), (0x14AA, 0x14AA))
+        self.assertEqual([image[16 + i] for i in (50, 52, 57, 58)], [45, 45, 45, 109])
         self.assertTrue(probe['lens_model'].endswith('[AZ]'))
         self.assertTrue(default['lens_model'].endswith('[DZ]'))
         self.assertNotEqual(image, build_profile(default))
+
+    def test_focal_maps_and_edges(self):
+        import struct
+        maps = load_focal_maps()
+        self.assertEqual(FOCAL_MAP_HEADER.read_text(), render_focal_map_header(maps))
+        self.assertEqual(len(maps['standard']), 40)
+        self.assertEqual(len(maps['telephoto']), 40)
+        catalog = load_catalog()
+        self.assertEqual(sum(p['lens_type'] == 'prime' for p in catalog.values()), 16)
+        defaults = [p for p in catalog.values() if p['focal_length_source'] == 'default_zoom']
+        self.assertEqual(len(defaults), 4)
+        self.assertTrue(all(p['lens_model'].endswith('[DZ]') for p in defaults))
+        for key, limits, focal, bcd in (
+            ('sigma-21-35-3-5-4-2-aperture-test', (0x1055, 0x1200), 210, '00 21 00 35 11 11'),
+            ('asahi-smc-takumar-135-600-6-7-aperture-test', (0x14AA, 0x1D00), 1350, '01 35 06 00 50 50'),
+        ):
+            with self.subTest(profile=key):
+                p = catalog[key]
+                image = build_profile(p)
+                self.assertIn('[TEST]', p['lens_model'])
+                self.assertEqual(struct.unpack_from('<HH', image, 164 + 6), limits)
+                self.assertEqual(image[164 + 22:164 + 28], bytes.fromhex(bcd))
+                self.assertEqual(struct.unpack_from('<HH', image, 16 + 30), (focal, focal))
 
     def test_duplicate_and_unsafe_id(self):
         p = next(iter(load_catalog().values()))

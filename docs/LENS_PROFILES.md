@@ -20,15 +20,16 @@ The default command generates all supported prime and constant-aperture zoom pro
 | profile_id | Lowercase kebab-case identifier |
 | lens_model | ASCII model string, 1–63 bytes |
 | sony_lens_id | 16-bit lens ID (0 is the tested reference) |
-| lens_type | prime and constant-aperture zoom supported; zoom hardware validation pending (issue #5) |
-| focal_length_min_mm, focal_length_max_mm, focal_length_default_mm | Equal integer focal lengths, 1–500 mm |
-| focal_length_source | fixed for primes; zoom_range for zooms with catalog default |
+| lens_type | prime and zoom; constant-aperture DZ supported, AZ virtual selector profiles experimental |
+| focal_length_min_mm, focal_length_max_mm, focal_length_default_mm | Integer focal lengths, 1–500 mm for primes (all equal), 1–600 mm for zooms (ordered range and contained default) |
+| focal_length_source | fixed, default_zoom, aperture_zoom | 
+| focal_length_map | AZ only: standard or telephoto, see [focal maps](FOCAL_LENGTH_MAPS.md) |
 | aperture_max_f | Maximum opening at the shortest focal length |
 | aperture_max_tele_f | Maximum opening at the longest focal length; equal for primes |
 | aperture_min_f | Narrowest opening |
 | aperture_now_f | Fixed reported f-number, independent of mechanical aperture |
 
-The physical catalog aperture bounds (f/1–f/64, reported aperture no greater than f/9) are retained. The Stage 6C Arsat aperture-zoom range probe advertises raw 0x0F00–0x1E00 (f/0.707–f/128) with initial raw 0x0F00; the v1 firmware validator permits this exact extended combination for zooms only. The previous probe remains loadable. This exception is not a persistent runtime mode identifier. There is no iris control or sensing.
+The physical catalog aperture bounds (f/1–f/64, reference aperture no greater than f/9) are retained. AZ uses virtual selector bounds from the approved maps, with an initial aperture corresponding to its catalog default. The current profiles advertise only their respective map subrange. The v1 firmware validator permits exact mapped combinations beyond the normal aperture limits and retains the previous extended probe for diagnostics. This is not a persistent runtime mode identifier; dynamic focal reporting remains disabled. There is no iris control or sensing.
 
 ## Binary format v1
 

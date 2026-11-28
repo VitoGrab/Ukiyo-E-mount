@@ -4,6 +4,7 @@
 #include "emount_packets.h"
 #include "emount.h"
 #include "lens_profile.h"
+#include "focal_length_maps.h"
 #include <string.h>
 
 /* A u16 as the two little-endian bytes of a template. */
@@ -204,6 +205,28 @@ static int profile_focal_bcd(const uint8_t *p)
     return (int)(1000u * a + 100u * b + 10u * c + d);
 }
 
+static unsigned selector_raw(unsigned index)
+{
+    return 0x1000u + index * 256u / 3u;
+}
+
+/* A v1 image can match a map without carrying an explicit mode field.
+ * This predicate only validates the virtual limits, never enables a mode. */
+static uint8_t mapped_zoom_range(int wide, int tele, unsigned focal,
+                                 unsigned max, unsigned min, unsigned now)
+{
+    if (tele <= wide) return 0u;
+    const uint16_t *map = tele <= 210 ? ukiyo_focal_map_standard : ukiyo_focal_map_telephoto;
+    unsigned lo = UKIYO_FOCAL_MAP_SIZE, hi = lo, current = lo;
+    for (unsigned i = 0; i < UKIYO_FOCAL_MAP_SIZE; ++i) {
+        if (map[i] == (unsigned)wide) lo = i;
+        if (map[i] == (unsigned)tele) hi = i;
+        if (map[i] * 10u == focal) current = i;
+    }
+    return lo < hi && hi < UKIYO_FOCAL_MAP_SIZE && current >= lo && current <= hi &&
+           max == selector_raw(lo) && min == selector_raw(hi) && now == selector_raw(current);
+}
+
 uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
 {
     unsigned offset = UKIYO_PROFILE_HEADER_SIZE;
@@ -232,7 +255,7 @@ uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
     unsigned now = profile_u16(status + 6);
     int wide = profile_focal_bcd(spec + 22);
     int tele = profile_focal_bcd(spec + 24);
-    if (wide < 1 || wide > 500 || tele < 0 || tele > 500) return 0;
+    if (wide < 1 || wide > (tele ? 600 : 500) || tele < 0 || tele > 600) return 0;
     if (tele == 0) {
         if (focal != (unsigned)wide * 10u || spec[27] != 0u) return 0;
     } else {
@@ -243,14 +266,15 @@ uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
     /* Exact v1 range probe exception; not a runtime mode marker. */
     const uint8_t extended_probe = (tele > 0 && max == 0x0F00u &&
                                     min == 0x1E00u && now == 0x0F00u);
-    if (!extended_probe && (max < 4096u || min > 7168u)) return 0;
-    if (focal < 10u || focal > 5000u || focal % 10u ||
+    const uint8_t mapped_zoom = mapped_zoom_range(wide, tele, focal, max, min, now);
+    if (!extended_probe && !mapped_zoom && (max < 4096u || min > 7168u || now > 5719u)) return 0;
+    if (focal < 10u || focal > (tele ? 6000u : 5000u) || focal % 10u ||
         profile_u16(status + 32) != focal ||
         profile_u16(capture + 10) != focal || profile_u16(capture + 12) != focal ||
         profile_u16(capture35 + 10) != focal || profile_u16(capture35 + 12) != focal ||
         capture[15] || capture[16] ||
         capture35[15] || capture35[16] ||
-        max > now || now > 5719u || now > min ||
+        max > now || now > min ||
         profile_u16(status + 8) != now || profile_u16(iris + 6) != now ||
         profile_u16(iris + 8) != now ||
         status[50] != EM_AV_DESC(max) || status[52] != EM_AV_DESC(max) ||

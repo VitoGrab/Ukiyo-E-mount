@@ -23,24 +23,37 @@ class LensProfileTests(unittest.TestCase):
         self.assertEqual(profile["focal_length_default_mm"], 135)
 
     def test_zoom(self):
-        p = self.validate(lens_type="zoom", focal_length_source="zoom_range",
+        p = self.validate(lens_type="zoom", focal_length_source="default_zoom",
                           focal_length_min_mm=80, focal_length_max_mm=200,
                           focal_length_default_mm=135)
         self.assertEqual(p["focal_length_default_mm"], 135)
 
-    def test_invalid_zoom_ranges(self):
+    def test_invalid_default_zooms(self):
         for wide, tele, default in ((80, 80, 80), (200, 80, 135),
                                     (80, 200, 79), (80, 200, 201)):
             with self.subTest(wide=wide, tele=tele, default=default), self.assertRaises(ProfileError):
-                self.validate(lens_type="zoom", focal_length_source="zoom_range",
+                self.validate(lens_type="zoom", focal_length_source="default_zoom",
                               focal_length_min_mm=wide, focal_length_max_mm=tele,
                               focal_length_default_mm=default)
 
     def test_variable_aperture_zoom_deferred(self):
         with self.assertRaisesRegex(ProfileError, "constant-aperture"):
-            self.validate(lens_type="zoom", focal_length_source="zoom_range",
+            self.validate(lens_type="zoom", focal_length_source="default_zoom",
                           focal_length_min_mm=80, focal_length_max_mm=200,
                           focal_length_default_mm=80, aperture_max_tele_f=2.8)
+
+    def test_aperture_map_validation(self):
+        from prepare_lens_profiles import load_catalog, selector_bounds
+        profile = load_catalog()['arsat-m-80-200-4-5-aperture']
+        self.assertEqual(selector_bounds(profile), (0x14AA, 0x1CAA, 0x14AA))
+        for changes in ({'focal_length_map': 'telephoto'},
+                        {'focal_length_max_mm': 201},
+                        {'focal_length_default_mm': 189},
+                        {'focal_length_map': 'unknown'}):
+            with self.subTest(changes=changes), self.assertRaises(ProfileError):
+                validate_profile(dict(profile, **changes))
+        with self.assertRaises(ProfileError):
+            validate_profile(dict(profile, focal_length_source='default_zoom'))
 
     def test_unequal_prime_range_rejected(self):
         with self.assertRaisesRegex(ProfileError, "identical"):

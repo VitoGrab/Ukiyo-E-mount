@@ -68,7 +68,7 @@ class BinaryProfileTests(unittest.TestCase):
             # Recompute checksums to exercise semantic rejection, not CRC rejection.
             for name, offset, value in (
                 ('probe-wrong-low', 16 + 148 + 6, 1),
-                ('probe-wrong-high', 16 + 148 + 8, 1),
+                ('probe-wrong-high', 16 + 148 + 8, 0xAB),
                 ('probe-wrong-nameplate', 16 + 148 + 26, 0x10),
                 ('probe-wrong-desc', 16 + 50, 1),
             ):

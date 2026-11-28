@@ -198,8 +198,8 @@ def choose_profile():
         for number in range(start, end):
             profile = profiles[number]
             source = profile.get('focal_length_source')
-            mode = {'zoom_range': ' [default zoom]',
-                    'zoom_aperture': ' [aperture zoom - experimental]'}.get(source, '')
+            mode = {'default_zoom': ' [default zoom]',
+                    'aperture_zoom': ' [aperture zoom - experimental]'}.get(source, '')
             print(f"  {number + 1:2d}. {profile['lens_model']}{mode}")
         if end < len(profiles):
             print("   N. Next page")
@@ -224,9 +224,12 @@ def choose_profile():
 def selected_profile_image(profile):
     """Build the selected image in memory; never overwrite a catalog BIN."""
     selected = dict(profile)
-    if selected['lens_type'] == 'zoom' and selected['focal_length_source'] == 'zoom_aperture':
+    if selected['lens_type'] == 'zoom' and selected['focal_length_source'] == 'aperture_zoom':
         print(f"Selected: {selected['lens_model']} [aperture zoom - experimental]")
-        print('Virtual aperture range: f/0.707-f/128 (experimental); focal length remains at catalog default during this probe.')
+        from prepare_lens_profiles import selector_bounds
+        low, high, initial = selector_bounds(selected)
+        print(f"Focal map: {selected['focal_length_map']}; selector RAW 0x{low:04X}-0x{high:04X}, initial 0x{initial:04X}")
+        print('Focal length remains at catalog default during this probe.')
     elif selected['lens_type'] == 'zoom':
         wide = selected['focal_length_min_mm']
         tele = selected['focal_length_max_mm']

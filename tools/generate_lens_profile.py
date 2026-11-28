@@ -9,14 +9,11 @@ import struct
 import sys
 import zlib
 from prepare_lens_profiles import (ROOT, CONFIG, ProfileError, load_catalog,
-                                select_profile, validate_profile)
+                                select_profile, validate_profile, selector_bounds)
 
 ORDER = [('05', 105), ('07', 43), ('08', 210), ('1b', 19),
          ('28', 44), ('35', 48), ('3f', 74)]
 SIZE = 559
-# Exact protocol-grid endpoints for the current hardware probe.
-APERTURE_PROBE_MIN_RAW = 0x0F00  # f/0.70710678
-APERTURE_PROBE_MAX_RAW = 0x1E00  # f/128
 BASE = ROOT / 'profiles' / 'base_packets.json'
 BCD_APERTURES = (0x10, 0x11, 0x12, 0x14, 0x16, 0x18, 0x20, 0x22,
                  0x25, 0x28, 0x32, 0x35, 0x40, 0x45, 0x50, 0x56,
@@ -47,9 +44,8 @@ def build_profile(p):
                               ('aperture_max_f', 'aperture_min_f', 'aperture_now_f'))
     # Evidence-only selector profile: advertise internally consistent virtual
     # limits without changing the physical lens record. No runtime zoom yet.
-    if p['focal_length_source'] == 'zoom_aperture':
-        maximum = now = APERTURE_PROBE_MIN_RAW
-        minimum = APERTURE_PROBE_MAX_RAW
+    if p['focal_length_source'] == 'aperture_zoom':
+        maximum, minimum, now = selector_bounds(p)
     for key, offset in (('05', 30), ('28', 10), ('35', 10)):
         put16(frames[key], offset, mm * 10)
         put16(frames[key], offset + 2, mm * 10)
@@ -58,8 +54,9 @@ def build_profile(p):
     tele = p['focal_length_max_mm'] if p['lens_type'] == 'zoom' else 0
     spec[22:26] = bytes((bcd(wide // 100), bcd(wide),
                          bcd(tele // 100), bcd(tele)))
-    spec[26] = (0x07 if maximum == APERTURE_PROBE_MIN_RAW else
-                BCD_APERTURES[min(19, ((maximum - 4096) * 3 + 128) // 256)])
+    # BCD nameplate has a one-byte limit; as before, cap at f/9.
+    # AZ uses virtual values until physical aperture reporting is investigated.
+    spec[26] = BCD_APERTURES[min(19, ((maximum - 4096) * 3 + 128) // 256)]
     spec[27] = spec[26] if tele else 0
     put16(spec, 6, maximum)
     put16(spec, 8, minimum)
