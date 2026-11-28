@@ -36,7 +36,7 @@ Stage numbers describe work packages; firmware versions identify actual code mil
 | 4.10. Standalone binary profiles | Catalog, 16 prime BINs, shared templates, v1 format and fallback | Independent generated profile images | Implemented (v0.410); camera validation followed in v0.411 |
 | 4.11. Persistent prime profiles | Reserved Flash, USB CDC programming, readback, reset, BOSSA 1.9 retention | Change prime profile without rebuilding; preserve it across changed firmware uploads | Passed on a6000 (v0.411); merged to main |
 | 5. Standalone power | Direct LOGIC_VCC prototype and low-power IDLE0 sleep | Functional body-only startup, remount and sleep/wake | Passed on a6000; final electrical and production qualification open (v0.5.0) |
-| 6. Manual zoom profiles | Focal range, default/current focal length and optical metadata | Validated zoom profile generation, programming and camera behavior | **Next** — [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5) |
+| 6. Manual zoom profiles | Focal range, default/current focal length and optical metadata | Validated zoom profile generation, programming and camera behavior | **Next** — [Stage 6 plan](docs/STAGE6_MANUAL_ZOOM.md) · [issue #5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5) |
 | 7. Cross-body compatibility | a6500 and additional bodies | Verify mount, MF, EXIF, zoom, sleep/wake and remount | After zoom |
 | 8. Mechanical integration | SELP1650 service contact assembly and internal carrier | Secure fit, no shorts, optics unaffected | Parallel hardware track; parts planned |
 | 9. Optional extras | Aperture sensing, I2C sensors, other experiments | Separate proof-of-concept tests | Future, not required for core firmware |
