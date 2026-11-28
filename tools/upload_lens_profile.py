@@ -9,8 +9,8 @@ import sys
 import time
 import zlib
 
-from generate_lens_profile import ORDER, SIZE
-from prepare_lens_profiles import CONFIG, prepare_profiles
+from generate_lens_profile import ORDER, SIZE, build_profile
+from prepare_lens_profiles import prepare_profiles
 
 CHUNK = 24
 
@@ -184,7 +184,7 @@ def wait_until_armed(serial_module, port, verbose=False, timeout=20):
 
 
 def choose_profile():
-    """Prepare fresh BINs before displaying the live catalog in the terminal."""
+    """Prepare fresh BINs and return a selected catalog record, or None."""
     profiles = prepare_profiles()
     # Keep the first entry visible even in a short VS Code terminal.
     # The catalog order and numbering are stable across pages.
@@ -213,8 +213,42 @@ def choose_profile():
         if choice.isdecimal() and len(choice) <= 5:
             number = int(choice)
             if 1 <= number <= len(profiles):
-                return CONFIG.parent / (profiles[number - 1]['profile_id'] + '.bin')
+                return profiles[number - 1]
         print("Invalid selection.")
+
+
+def selected_profile_image(profile):
+    """Build the selected image in memory; never overwrite a catalog BIN."""
+    selected = dict(profile)
+    if selected['lens_type'] == 'zoom':
+        wide = selected['focal_length_min_mm']
+        tele = selected['focal_length_max_mm']
+        default = selected['focal_length_default_mm']
+        print(f"Selected: {selected['lens_model']}")
+        print(f'Focal length range: {wide}-{tele} mm')
+        while True:
+            value = input(f'Default focal length in mm [{default}] (q = cancel): ').strip().lower()
+            if value == 'q':
+                return None
+            if not value:
+                mm = default
+            elif value.isascii() and value.isdecimal() and len(value) <= 3:
+                mm = int(value)
+            else:
+                print('Enter a whole number of millimetres.')
+                continue
+            if not wide <= mm <= tele:
+                print(f'Focal length must be between {wide} and {tele} mm.')
+                continue
+            selected['focal_length_default_mm'] = mm
+            break
+    return build_profile(selected)
+
+
+def focal_length_mm(image):
+    """Decode the stored nominal focal length (0x05 payload[24:26])."""
+    validate_image(image)
+    return struct.unpack_from('<H', image, 16 + 6 + 24)[0] / 10
 
 
 def main():
@@ -241,9 +275,11 @@ def main():
         parser.error('Readback destination already exists')
     reset_requested = False
     try:
+        data = None
         if args.select:
-            args.profile = choose_profile()
-            if args.profile is None:
+            selected = choose_profile()
+            data = selected_profile_image(selected) if selected is not None else None
+            if data is None:
                 print('PROFILE_UPLOAD=CANCELLED')
                 return 0
             if not args.detached:
@@ -251,7 +287,8 @@ def main():
                 if input('Camera physically disconnected? [y/N]: ').strip().lower() != 'y':
                     print('PROFILE_UPLOAD=CANCELLED')
                     return 0
-        data = args.profile.read_bytes() if args.profile else None
+        elif args.profile:
+            data = args.profile.read_bytes()
         if data is not None:
             validate_image(data)
         try:
@@ -271,7 +308,9 @@ def main():
                 if args.info:
                     states = [line for line in info if line.startswith('PROFILE_VALID=')]
                     if states == ['PROFILE_VALID=1']:
-                        print('PROFILE_LENS_MODEL=' + lens_model(device.read()))
+                        stored = device.read()
+                        print('PROFILE_LENS_MODEL=' + lens_model(stored))
+                        print(f'PROFILE_FOCAL_LENGTH_MM={focal_length_mm(stored):g}')
                     elif states == ['PROFILE_VALID=0']:
                         print('PROFILE_LENS_MODEL=NONE (embedded fallback on next initialization)')
                     else:
@@ -280,6 +319,7 @@ def main():
                     device.upload(data)
                     print('PROFILE_UPLOAD=PASS (byte-for-byte readback verified)', flush=True)
                     print('PROFILE_LENS_MODEL=' + lens_model(data), flush=True)
+                    print(f'PROFILE_FOCAL_LENGTH_MM={focal_length_mm(data):g}', flush=True)
                     if args.reset:
                         reset_requested = True
                         device.reset()

@@ -15,7 +15,7 @@ python3 tools/generate_lens_profile.py --profile-id hanimex-135-f2-8
 python3 tools/generate_lens_profile.py --verify-only
 ```
 
-Stage 6A generates the four constant-aperture zoom BINs and makes them selectable in the uploader. Focal length is the catalog default; dynamic selection is deferred (issue #5). Variable-aperture zooms are not supported in this stage. IDs must be unique lowercase kebab-case. The shared `base_packets.json` is the generator's protocol template input, not a lens record. Generation does not modify firmware.
+Stage 6A generates the four constant-aperture zoom BINs and makes them selectable in the uploader. Catalog BINs retain the catalog default. Stage 6B permits an individual integer focal length during interactive upload without editing the catalog or rebuilding firmware. Dynamic in-camera selection is deferred (issue #5). Variable-aperture zooms are not supported in this stage. IDs must be unique lowercase kebab-case. The shared `base_packets.json` is the generator's protocol template input, not a lens record. Generation does not modify firmware.
 
 The firmware uses the embedded Helios fallback if no valid image is found in the reserved Flash region. Independent USB CDC programming, Helios/Hanimex switching, Pentacon programming with automatic reset, and Rubinar fixed-aperture behavior were validated by the maintainer on a6000; see [Flash programming](../docs/PROFILE_FLASH.md). See [format and validation](../docs/LENS_PROFILES.md).
 

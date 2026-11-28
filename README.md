@@ -90,7 +90,7 @@ The numbered list below retains the complete long-term acceptance criteria.
 
 `config/protocol_identity.json` is the single source of truth for the project version and E-mount protocol revision.
 
-- The current development project version is `0.5.1` (Stage 6A). For `0.MINOR.PATCH`, MINOR maps to the Sony firmware major byte and PATCH to the suffix byte: `0.4.11` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5.0` -> `pl[6]=0x05`, `pl[5]=0x00`. The historic `0.411` label corresponds to `0.4.11`.
+- The current development project version is `0.5.1` (Stages 6A–6B). For `0.MINOR.PATCH`, MINOR maps to the Sony firmware major byte and PATCH to the suffix byte: `0.4.11` -> `pl[6]=0x04`, `pl[5]=0x0B`; `0.5.0` -> `pl[6]=0x05`, `pl[5]=0x00`. The historic `0.411` label corresponds to `0.4.11`.
 - The suffix occupies one byte (0–255). The generated v0.5.1 identity is expected to render as `Ver.05.001`; the historical v0.411 identity was expected to render as `Ver.04.011`; `Ver.04.008` was observed in an earlier capture, not established as the current firmware identity.
 - The a6000 test has also produced `Ver.04.003` after setting `pl[5]=0x03`, supporting the suffix mapping. The body-side reason that version MakerNotes appear only on some captures remains unresolved; retain [issue #3](https://github.com/VitoGrab/Ukiyo-E-mount/issues/3) as open.
 - `emount_protocol_version` remains `1.08`. The 1.31 experiment was not necessary for the EXIF fields and is not the selected baseline.
@@ -137,7 +137,7 @@ Disconnect the camera physically before USB firmware or profile programming. Nev
 
 - `Ukiyo: Build & Upload` prepares profiles and firmware identity, builds the default environment from `platformio.ini`, and retries SAM-BA upload up to three times. No profile write or monitor launch.
 - `Ukiyo: Select Build Type` sets `[platformio] default_envs` to Debug (status LEDs enabled) or Production (status LEDs disabled). The selection persists in the tracked INI; changing it is a local configuration edit.
-- `Ukiyo: Upload Lens Profile` prepares the entire catalog, displays a numbered live list of supported lenses in the terminal, requires physical detachment confirmation and uploads only the selected BIN.
+- `Ukiyo: Upload Lens Profile` prepares the entire catalog, displays a numbered live list of supported lenses in the terminal, offers a custom default focal length for zooms, requires physical detachment confirmation and uploads only the selected image.
 - `Ukiyo: Monitor` opens the serial monitor separately.
 - `Ukiyo: Clean` cleans both build environments.
 
@@ -241,4 +241,4 @@ A0 no longer blocks USB profile programming, because direct 3V3 wiring energizes
 
 ### Stage 6A development — v0.5.1
 
-This branch adds constant-aperture manual zoom identity and catalog-default focal reporting, retaining v1 profile compatibility for primes. The four catalog zoom profiles are experimental until hardware acceptance. See [Stage 6 plan](docs/STAGE6_MANUAL_ZOOM.md). No aperture-based focal control or runtime selection yet.
+This branch adds constant-aperture manual zoom identity and catalog-default focal reporting, retaining v1 profile compatibility for primes. The four catalog zoom profiles are experimental until hardware acceptance. See [Stage 6 plan](docs/STAGE6_MANUAL_ZOOM.md). Stage 6B adds a zoom-only default-focal prompt at upload, generating a customized image in memory without changing the catalog or firmware. Arsat identity and capture metadata at 80 mm passed on a6000; custom focal hardware acceptance is pending. No aperture-based focal control or live runtime selection yet.

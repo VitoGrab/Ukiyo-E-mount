@@ -1,5 +1,6 @@
 """Host protocol regression using a fake USB CDC peer; no hardware access."""
 import pathlib
+import struct
 import os
 import sys
 import unittest
@@ -8,7 +9,8 @@ from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from upload_lens_profile import Device, UploadError, validate_image, lens_model, wait_until_armed, choose_profile, main, SIZE, CHUNK
+from upload_lens_profile import Device, UploadError, validate_image, lens_model, wait_until_armed, choose_profile, selected_profile_image, focal_length_mm, main, SIZE, CHUNK
+from prepare_lens_profiles import load_catalog
 
 class FakeSerial:
     def __init__(self, corrupt=False, reject=False, armed=True):
@@ -84,13 +86,13 @@ class UploadTests(unittest.TestCase):
         catalog = [{'profile_id': 'test-new-lens', 'lens_model': 'New lens'}]
         with patch('upload_lens_profile.prepare_profiles', return_value=catalog) as prep, \
              patch('builtins.input', return_value='1'):
-            self.assertEqual(choose_profile().name, 'test-new-lens.bin')
+            self.assertEqual(choose_profile()['profile_id'], 'test-new-lens')
         prep.assert_called_once_with()
 
     def test_select_cancel_before_usb(self):
         args = ['upload_lens_profile.py', '--port', '/dev/test', '--select']
         with patch.object(sys, 'argv', args), \
-             patch('upload_lens_profile.choose_profile', return_value=ROOT / 'profiles/helios-44m-4.bin'), \
+             patch('upload_lens_profile.choose_profile', return_value=load_catalog()['helios-44m-4']), \
              patch('builtins.input', return_value='no'), \
              patch.dict(sys.modules, {'serial': None}):
             self.assertEqual(main(), 0)
@@ -98,19 +100,75 @@ class UploadTests(unittest.TestCase):
     def test_first_catalog_entry_and_pagination(self):
         with patch('upload_lens_profile.shutil.get_terminal_size', return_value=os.terminal_size((80, 12))), \
              patch('builtins.input', side_effect=['n', 'p', '1']):
-            self.assertEqual(choose_profile().name, 'helios-44m-4.bin')
+            self.assertEqual(choose_profile()['profile_id'], 'helios-44m-4')
 
     def test_select_y_upload_leaves_bus_off(self):
         peer = FakeSerial()
         serial = SimpleNamespace(Serial=lambda *a, **kw: peer)
         args = ['upload_lens_profile.py', '--port', '/dev/test', '--select']
         with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
-             patch('upload_lens_profile.choose_profile', return_value=ROOT / 'profiles/helios-44m-4.bin'), \
+             patch('upload_lens_profile.choose_profile', return_value=load_catalog()['helios-44m-4']), \
              patch('builtins.input', return_value='Y'), patch('upload_lens_profile.time.sleep'):
             self.assertEqual(main(), 0)
         self.assertEqual(peer.stored, (ROOT / 'profiles/helios-44m-4.bin').read_bytes())
         self.assertNotIn('profile reset', peer.commands)
         self.assertEqual(peer.commands[0], 'x')
+
+
+    def test_prime_image_no_focal_prompt(self):
+        prime = load_catalog()['helios-44m-4']
+        with patch('builtins.input', side_effect=AssertionError('Unexpected prompt')):
+            self.assertEqual(selected_profile_image(prime),
+                             (ROOT / 'profiles/helios-44m-4.bin').read_bytes())
+
+    def test_zoom_default_and_custom_images(self):
+        profile = load_catalog()['arsat-m-80-200-4-5']
+        original = dict(profile)
+        path = ROOT / 'profiles/arsat-m-80-200-4-5.bin'
+        catalog_bin = path.read_bytes()
+        for answer, mm in (('', 80), ('80', 80), ('135', 135), ('175', 175), ('200', 200)):
+            with self.subTest(answer=answer), patch('builtins.input', return_value=answer):
+                image = selected_profile_image(profile)
+                validate_image(image)
+                self.assertEqual(focal_length_mm(image), mm)
+                # Equal focal pair in 0x05, 0x28 and 0x35.
+                for offset in (16 + 30, 16 + 377 + 10, 16 + 421 + 10):
+                    self.assertEqual(struct.unpack_from('<HH', image, offset), (mm * 10, mm * 10))
+                # Rated range, maximum aperture, lens identity unchanged.
+                self.assertEqual(image[16 + 148:16 + 358], catalog_bin[16 + 148:16 + 358])
+                self.assertEqual(lens_model(image), 'ARSAT M 80-200mm f4.5')
+                if mm == 80:
+                    self.assertEqual(image, catalog_bin)
+        self.assertEqual(profile, original)
+        self.assertEqual(path.read_bytes(), catalog_bin)
+
+    def test_zoom_invalid_input_and_cancel(self):
+        profile = load_catalog()['arsat-m-80-200-4-5']
+        with patch('builtins.input', side_effect=['79', '201', '-1', '135.5', 'abc', '175']):
+            self.assertEqual(focal_length_mm(selected_profile_image(profile)), 175)
+        with patch('builtins.input', return_value='q'):
+            self.assertIsNone(selected_profile_image(profile))
+
+    def test_zoom_cancel_before_usb(self):
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--select']
+        with patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.choose_profile', return_value=load_catalog()['arsat-m-80-200-4-5']), \
+             patch('builtins.input', return_value='q'), \
+             patch.dict(sys.modules, {'serial': None}):
+            self.assertEqual(main(), 0)
+
+    def test_zoom_custom_upload_and_readback(self):
+        peer = FakeSerial()
+        serial = SimpleNamespace(Serial=lambda *a, **kw: peer)
+        args = ['upload_lens_profile.py', '--port', '/dev/test', '--select']
+        with patch.dict(sys.modules, {'serial': serial}), patch.object(sys, 'argv', args), \
+             patch('upload_lens_profile.choose_profile', return_value=load_catalog()['arsat-m-80-200-4-5']), \
+             patch('builtins.input', side_effect=['135', 'Y']), patch('upload_lens_profile.time.sleep'):
+            self.assertEqual(main(), 0)
+        self.assertEqual(focal_length_mm(peer.stored), 135)
+        self.assertEqual(lens_model(peer.stored), 'ARSAT M 80-200mm f4.5')
+        self.assertEqual(peer.commands.count('profile commit'), 1)
+        self.assertNotIn('profile reset', peer.commands)
 
     def test_success(self):
         peer = FakeSerial()
