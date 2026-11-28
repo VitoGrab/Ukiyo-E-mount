@@ -30,13 +30,17 @@ class CatalogTests(unittest.TestCase):
         probe = catalog['arsat-m-80-200-4-5-aperture']
         self.assertEqual(probe['focal_length_source'], 'zoom_aperture')
         self.assertEqual(default, dict(probe, profile_id=default['profile_id'],
-                                       focal_length_source='zoom_range'))
+                                       focal_length_source='zoom_range',
+                                       lens_model=default['lens_model']))
         image = build_profile(probe)
         spec = 16 + 148
-        self.assertEqual(struct.unpack_from('<HH', image, spec + 6), (4096, 7168))
-        self.assertEqual(image[spec + 22:spec + 28], bytes.fromhex('00 80 02 00 10 10'))
+        self.assertEqual(struct.unpack_from('<HH', image, spec + 6), (0x0F00, 0x1E00))
+        self.assertEqual(image[spec + 22:spec + 28], bytes.fromhex('00 80 02 00 07 07'))
         self.assertEqual(struct.unpack_from('<HH', image, 16 + 30), (800, 800))
-        self.assertEqual(struct.unpack_from('<HH', image, 16 + 6), (4096, 4096))
+        self.assertEqual(struct.unpack_from('<HH', image, 16 + 6), (0x0F00, 0x0F00))
+        self.assertEqual([image[16 + i] for i in (50, 52, 57, 58)], [0, 0, 0, 120])
+        self.assertTrue(probe['lens_model'].endswith('[AZ]'))
+        self.assertTrue(default['lens_model'].endswith('[DZ]'))
         self.assertNotEqual(image, build_profile(default))
 
     def test_duplicate_and_unsafe_id(self):

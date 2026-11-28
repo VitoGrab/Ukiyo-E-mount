@@ -136,7 +136,7 @@ class UploadTests(unittest.TestCase):
                     self.assertEqual(struct.unpack_from('<HH', image, offset), (mm * 10, mm * 10))
                 # Rated range, maximum aperture, lens identity unchanged.
                 self.assertEqual(image[16 + 148:16 + 358], catalog_bin[16 + 148:16 + 358])
-                self.assertEqual(lens_model(image), 'ARSAT M 80-200mm f4.5')
+                self.assertEqual(lens_model(image), 'ARSAT M 80-200mm f4.5 [DZ]')
                 if mm == 80:
                     self.assertEqual(image, catalog_bin)
         self.assertEqual(profile, original)
@@ -174,7 +174,7 @@ class UploadTests(unittest.TestCase):
              patch('builtins.input', side_effect=['135', 'Y']), patch('upload_lens_profile.time.sleep'):
             self.assertEqual(main(), 0)
         self.assertEqual(focal_length_mm(peer.stored), 135)
-        self.assertEqual(lens_model(peer.stored), 'ARSAT M 80-200mm f4.5')
+        self.assertEqual(lens_model(peer.stored), 'ARSAT M 80-200mm f4.5 [DZ]')
         self.assertEqual(peer.commands.count('profile commit'), 1)
         self.assertNotIn('profile reset', peer.commands)
 

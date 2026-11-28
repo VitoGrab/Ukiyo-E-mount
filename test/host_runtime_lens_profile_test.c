@@ -56,9 +56,25 @@ int main(int argc, char **argv) {
         assert(em_msg_08[26] == 0x45 && em_msg_08[27] == 0x45);
         assert(u16(em_msg_08 + 6) == maximum && u16(em_msg_08 + 8) == minimum);
         assert(u16(em_msg_05 + 6) == maximum && u16(em_msg_1B + 6) == maximum);
-        assert(strcmp((const char *)em_msg_3F + 7, "ARSAT M 80-200mm f4.5") == 0);
+        assert(strcmp((const char *)em_msg_3F + 7, "ARSAT M 80-200mm f4.5 [DZ]") == 0);
         assert(memcmp(snapshot, em_msg_01, sizeof(snapshot)) == 0);
         puts("ARSAT_PROFILE=PASS");
+        return 0;
+    }
+    if (argc == 3 && strcmp(argv[1], "--aperture-probe") == 0) {
+        read_image(argv[2], image);
+        assert(ukiyo_profile_validate(image, sizeof(image)));
+        assert(ukiyo_profile_stage(image, sizeof(image)));
+        ukiyo_profile_apply();
+        assert(u16(em_msg_08 + 6) == 0x0F00u && u16(em_msg_08 + 8) == 0x1E00u);
+        assert(em_msg_08[26] == 0x07u && em_msg_08[27] == 0x07u);
+        assert(u16(em_msg_05 + 6) == 0x0F00u && u16(em_msg_1B + 6) == 0x0F00u);
+        assert(em_msg_05[50] == 0u && em_msg_05[52] == 0u &&
+               em_msg_05[57] == 0u && em_msg_05[58] == 120u);
+        assert(u16(em_msg_05 + 30) == 800u && u16(em_msg_28 + 10) == 800u &&
+               u16(em_msg_35 + 10) == 800u);
+        assert(strcmp((const char *)em_msg_3F + 7, "ARSAT M 80-200mm f4.5 [AZ]") == 0);
+        puts("APERTURE_PROBE=PASS");
         return 0;
     }
     if (argc > 1 && strcmp(argv[1], "--catalog") == 0) {

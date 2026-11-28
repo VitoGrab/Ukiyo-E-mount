@@ -12,7 +12,7 @@
 
 /* An aperture value (256 x AV + 4096) as message 0x05's descriptor byte: 1/8
  * stop, 0x08 = f/1.0, rounded to nearest. */
-#define EM_AV_DESC(av) ((uint8_t)(((av) - 4096u + 16u) / 32u + 8u))
+#define EM_AV_DESC(av) ((uint8_t)(((av) - 3840u + 16u) / 32u))
 
 /* An aperture value as message 0x08's nameplate f-number: F x 10 in BCD,
  * rounded to the nearest third of a stop on the marked series f/1.0 .. f/9
@@ -240,18 +240,22 @@ uint8_t ukiyo_profile_validate(const uint8_t *image, unsigned size)
         if (tele <= wide || focal < (unsigned)wide * 10u ||
             focal > (unsigned)tele * 10u || spec[27] != spec[26]) return 0;
     }
+    /* Exact v1 range probe exception; not a runtime mode marker. */
+    const uint8_t extended_probe = (tele > 0 && max == 0x0F00u &&
+                                    min == 0x1E00u && now == 0x0F00u);
+    if (!extended_probe && (max < 4096u || min > 7168u)) return 0;
     if (focal < 10u || focal > 5000u || focal % 10u ||
         profile_u16(status + 32) != focal ||
         profile_u16(capture + 10) != focal || profile_u16(capture + 12) != focal ||
         profile_u16(capture35 + 10) != focal || profile_u16(capture35 + 12) != focal ||
         capture[15] || capture[16] ||
         capture35[15] || capture35[16] ||
-        max < 4096u || max > now || now > 5719u || now > min || min > 7168u ||
+        max > now || now > 5719u || now > min ||
         profile_u16(status + 8) != now || profile_u16(iris + 6) != now ||
         profile_u16(iris + 8) != now ||
         status[50] != EM_AV_DESC(max) || status[52] != EM_AV_DESC(max) ||
         status[57] != EM_AV_DESC(max) || status[58] != EM_AV_DESC(min) ||
-        spec[26] != EM_F_BCD(max) ||
+        spec[26] != (extended_probe ? 0x07u : EM_F_BCD(max)) ||
         identity[6] != 1u || identity[8] || identity[9] || identity[11] || identity[12] ||
         spec[13] != UKIYO_MF_08_PL7 || spec[15] != UKIYO_MF_08_PL9 ||
         spec[19] != 0xe1 || spec[91] != UKIYO_MF_08_PL85 ||

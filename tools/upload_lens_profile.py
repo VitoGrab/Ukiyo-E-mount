@@ -226,7 +226,7 @@ def selected_profile_image(profile):
     selected = dict(profile)
     if selected['lens_type'] == 'zoom' and selected['focal_length_source'] == 'zoom_aperture':
         print(f"Selected: {selected['lens_model']} [aperture zoom - experimental]")
-        print('Virtual aperture range: f/1-f/64; focal length remains at catalog default during this probe.')
+        print('Virtual aperture range: f/0.707-f/128 (experimental); focal length remains at catalog default during this probe.')
     elif selected['lens_type'] == 'zoom':
         wide = selected['focal_length_min_mm']
         tele = selected['focal_length_max_mm']

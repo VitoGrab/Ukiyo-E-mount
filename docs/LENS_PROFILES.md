@@ -28,7 +28,7 @@ The default command generates all supported prime and constant-aperture zoom pro
 | aperture_min_f | Narrowest opening |
 | aperture_now_f | Fixed reported f-number, independent of mechanical aperture |
 
-The existing aperture bounds (f/1–f/64, reported aperture no greater than f/9) are retained. There is no iris control or sensing.
+The physical catalog aperture bounds (f/1–f/64, reported aperture no greater than f/9) are retained. The Stage 6C Arsat aperture-zoom range probe advertises raw 0x0F00–0x1E00 (f/0.707–f/128) with initial raw 0x0F00; the v1 firmware validator permits this exact extended combination for zooms only. The previous probe remains loadable. This exception is not a persistent runtime mode identifier. There is no iris control or sensing.
 
 ## Binary format v1
 

@@ -63,6 +63,24 @@ class BinaryProfileTests(unittest.TestCase):
             profiles = [str(CONFIG.parent / (p['profile_id'] + '.bin'))
                         for p in catalog.values()]
             subprocess.run([str(exe), '--catalog', *profiles], cwd=ROOT, check=True)
+            probe = CONFIG.parent / 'arsat-m-80-200-4-5-aperture.bin'
+            subprocess.run([str(exe), '--aperture-probe', str(probe)], cwd=ROOT, check=True)
+            # Recompute checksums to exercise semantic rejection, not CRC rejection.
+            for name, offset, value in (
+                ('probe-wrong-low', 16 + 148 + 6, 1),
+                ('probe-wrong-high', 16 + 148 + 8, 1),
+                ('probe-wrong-nameplate', 16 + 148 + 26, 0x10),
+                ('probe-wrong-desc', 16 + 50, 1),
+            ):
+                invalid = bytearray(probe.read_bytes())
+                invalid[offset] = value
+                start, length = (16, 105) if offset < 16 + 105 else (16 + 148, 210)
+                struct.pack_into('<H', invalid, start + length - 3,
+                                 sum(invalid[start + 1:start + length - 3]) & 0xffff)
+                struct.pack_into('<I', invalid, 8, zlib.crc32(invalid[16:]))
+                path = tmp / (name + '.bin')
+                path.write_bytes(invalid)
+                paths.append(str(path))
             arsat = catalog['arsat-m-80-200-4-5']
             for mm in (80, 135, 200):
                 zoom = build_profile(dict(arsat, focal_length_default_mm=mm))
