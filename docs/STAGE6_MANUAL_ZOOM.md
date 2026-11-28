@@ -1,6 +1,6 @@
 # Stage 6 — manual zoom profiles
 
-Status: 6A implementation available on `feature/manual-zoom` (v0.5.1); hardware acceptance pending. Baseline: v0.5.0, commit `4ea6d53286bc0990f38eb57011043ad0ad3f1e12`. Target milestone: v0.6.0 after acceptance, not a version bump at entry. Tracking: [#5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5). Sensor-based ring measurement is separate future research ([#6](https://github.com/VitoGrab/Ukiyo-E-mount/issues/6)). Cross-body compatibility follows Stage 6.
+Status: 6A implementation available on `feature/manual-zoom` (v0.5.1); Arsat identification/capture metadata PASS on a6000; remaining regression checks pending. Baseline: v0.5.0, commit `4ea6d53286bc0990f38eb57011043ad0ad3f1e12`. Target milestone: v0.6.0 after acceptance, not a version bump at entry. Tracking: [#5](https://github.com/VitoGrab/Ukiyo-E-mount/issues/5). Sensor-based ring measurement is separate future research ([#6](https://github.com/VitoGrab/Ukiyo-E-mount/issues/6)). Cross-body compatibility follows Stage 6.
 
 ## Reference hardware and scope
 
@@ -71,4 +71,18 @@ Do not change other catalog lenses' optical specifications without evidence. Ver
 
 ## 6A implementation notes (v0.5.1)
 
-The v1 559-byte layout already carries both BCD focal endpoints and both nameplate maximum apertures. Constant-aperture zooms now use these existing fields, with equal default focal values in status and capture templates. The four catalog zooms are generated and selectable; variable-aperture zooms are deliberately rejected at this stage. No runtime focal selection, USB default prompt or virtual aperture range is introduced. Prime binaries are unchanged. The maintainer will first test Arsat at 80 mm. Hardware and build acceptance remain pending.
+The v1 559-byte layout already carries both BCD focal endpoints and both nameplate maximum apertures. Constant-aperture zooms now use these existing fields, with equal default focal values in status and capture templates. The four catalog zooms are generated and selectable; variable-aperture zooms are deliberately rejected at this stage. No runtime focal selection, USB default prompt or virtual aperture range is introduced. Prime binaries are unchanged. Arsat at 80 mm passed the identification and capture-metadata test below. Remaining hardware and host/build regression checks are not yet documented.
+
+### 6A hardware evidence — Arsat, Sony a6000
+
+Maintainer reported three successful captures using the v0.5.1 Stage 6A test workflow (source reference `794f2d0e435f7c3faae5a4b62c4e4a3b9463befa`, catalog profile `arsat-m-80-200-4-5`, default 80 mm; generated catalog payload CRC32 `858E9FCD`). The following values are transcribed from the supplied ExifTool output, not independently extracted from the original JPEG files.
+
+| JPEG | FNumber | MaxApertureValue | FocalLength | MinFocalLength | MaxFocalLength | LensZoomPosition | FocusMode |
+|---|---:|---:|---:|---:|---:|---:|---|
+| DSC04869.JPG | 22.0 | 4.5 | 80 mm | 80 mm | 200 mm | 0% | Manual |
+| DSC04870.JPG | 8.0 | 4.5 | 80 mm | 80 mm | 200 mm | 0% | Manual |
+| DSC04871.JPG | 4.5 | 4.5 | 80 mm | 80 mm | 200 mm | 0% | Manual |
+
+All three: LensModel and composite LensID = ARSAT M 80-200mm f4.5; LensInfo = 80-200mm f/4.5; LensSpec = E 80-200mm F4.5; SonyMaxApertureValue = 4.5; FocalLengthIn35mmFormat = 120 mm; LensFormat = Full-frame; LensMount = E-mount; no AF points used. Generic/unknown Sony lens type and LensMount2 are unchanged in this evidence and are not failures of the model/range reporting. Aperture and focal length are reported settings, not optical measurements. The output confirms successful still captures, correct zoom identification, default focal length and independent reported aperture at three values. Peaking/Magnifier, prime regression, explicit power/wake checks, complete host tests and Production build are not separately confirmed by these excerpts.
+
+6B follow-up: check LensZoomPosition at intermediate/tele defaults (135/200 mm) before changing any unknown zoom-related fields. The observed 0% at 80 mm does not establish how the body derives the percentage.
