@@ -142,6 +142,14 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(profile, original)
         self.assertEqual(path.read_bytes(), catalog_bin)
 
+    def test_aperture_probe_no_focal_prompt(self):
+        profile = load_catalog()['arsat-m-80-200-4-5-aperture']
+        with patch('builtins.input', side_effect=AssertionError('Unexpected focal prompt')):
+            image = selected_profile_image(profile)
+        validate_image(image)
+        self.assertEqual(focal_length_mm(image), 80)
+        self.assertEqual(image, (ROOT / 'profiles/arsat-m-80-200-4-5-aperture.bin').read_bytes())
+
     def test_zoom_invalid_input_and_cancel(self):
         profile = load_catalog()['arsat-m-80-200-4-5']
         with patch('builtins.input', side_effect=['79', '201', '-1', '135.5', 'abc', '175']):

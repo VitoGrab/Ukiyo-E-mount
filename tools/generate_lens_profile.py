@@ -42,6 +42,10 @@ def build_profile(p):
     mm = p['focal_length_default_mm']
     maximum, minimum, now = (av(p[k]) for k in
                               ('aperture_max_f', 'aperture_min_f', 'aperture_now_f'))
+    # Evidence-only selector profile: advertise internally consistent virtual
+    # limits without changing the physical lens record. No runtime zoom yet.
+    if p['focal_length_source'] == 'zoom_aperture':
+        maximum, minimum, now = av(1.0), av(64.0), av(1.0)
     for key, offset in (('05', 30), ('28', 10), ('35', 10)):
         put16(frames[key], offset, mm * 10)
         put16(frames[key], offset + 2, mm * 10)

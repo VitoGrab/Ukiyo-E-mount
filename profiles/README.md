@@ -45,3 +45,5 @@ The initial 20 records were cross-checked against catalogues and published lens 
 | arsat-m-80-200-4-5 | [M42 Arsat review](https://radojuva.com/en/2011/01/obzor-arsat-80-200-granit-11/) and [related Arsat H specifications](https://ussrphoto.com/modern/Wiki/default.asp?ContentID=1294&ParentID=2&WikiCatID=28); constant f/4.5, f/22 endpoint. |
 
 The review confirms nominal lens specifications, not the accuracy of Sony E-mount reporting. Zoom BINs are experimental until camera validation.
+
+Stage 6C adds one experimental Arsat aperture-zoom record (`arsat-m-80-200-4-5-aperture`). The physical optical record is identical to the default zoom; the generator advertises a virtual f/1–f/64 aperture range only in the experimental BIN. The current focal length remains 80 mm until dynamic selection is implemented and validated. The v1 BIN does not carry an independent runtime mode flag. Existing IDs and BINs are unchanged; the interactive picker labels default and aperture zoom separately.

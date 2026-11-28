@@ -431,6 +431,15 @@ extern volatile uint8_t  em_status05_len;      /* 105 or 117, as now chosen  */
 extern volatile uint16_t em_m03_aperture;
 extern volatile uint16_t em_m03_n;
 
+/* Stage 6C evidence-only aperture monitor. Consumer runs in main context. */
+struct em_aperture_event {
+    uint32_t t_ms;
+    uint16_t first, second;
+    uint8_t id, flags;
+};
+uint8_t em_aperture_event_pop(struct em_aperture_event *out);
+uint32_t em_aperture_event_dropped(void);
+
 /* Message 0x04 pl[3], the focus control mode: 0x83 the body drives focus,
  * 0x81 manual focus (autofocus.md 3.5).  em_focus_mf goes to 1 after
  * EM_MF_FRAMES consecutive 0x81 frames and back to 0 on the first frame that

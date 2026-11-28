@@ -48,8 +48,8 @@ def validate_profile(p: dict, *, allow_zoom: bool = True) -> dict:
         raise ProfileError('Unsupported lens type (or zoom disabled)')
     if kind == 'prime' and p['focal_length_source'] != 'fixed':
         raise ProfileError('Prime lenses require focal_length_source=fixed')
-    if kind == 'zoom' and p['focal_length_source'] != 'zoom_range':
-        raise ProfileError('Catalog zoom entries require focal_length_source=zoom_range')
+    if kind == 'zoom' and p['focal_length_source'] not in ('zoom_range', 'zoom_aperture'):
+        raise ProfileError('Catalog zoom entries require zoom_range or zoom_aperture')
     focal_keys = ('focal_length_min_mm', 'focal_length_max_mm', 'focal_length_default_mm')
     for key in focal_keys:
         mm = p[key]

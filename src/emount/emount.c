@@ -280,6 +280,56 @@ volatile uint16_t em_scan_unit_n[2];
 volatile uint16_t em_aperture_req;
 volatile uint16_t em_m03_aperture;
 volatile uint16_t em_m03_n;
+
+/* Bounded single-producer (validated frame ISR), single-consumer queue.
+ * No formatting, USB I/O or waiting in the protocol interrupt. */
+#define EM_APERTURE_QUEUE_SIZE 32u
+static volatile struct em_aperture_event aperture_queue[EM_APERTURE_QUEUE_SIZE];
+static volatile uint8_t aperture_head, aperture_tail;
+static volatile uint32_t aperture_dropped;
+static uint8_t aperture_seen, aperture_last_flags;
+static uint16_t aperture_last_first, aperture_last_second;
+
+static void aperture_record(uint8_t id, uint16_t first, uint16_t second, uint8_t flags)
+{
+    if (id == 0x03u) {
+        if (aperture_seen && first == aperture_last_first &&
+            second == aperture_last_second && flags == aperture_last_flags) return;
+    }
+    uint8_t head = aperture_head;
+    uint8_t next = (uint8_t)((head + 1u) % EM_APERTURE_QUEUE_SIZE);
+    if (next == aperture_tail) { ++aperture_dropped; return; }
+    if (id == 0x03u) {
+        aperture_seen = 1u;
+        aperture_last_first = first;
+        aperture_last_second = second;
+        aperture_last_flags = flags;
+    }
+    aperture_queue[head].t_ms = millis();
+    aperture_queue[head].first = first;
+    aperture_queue[head].second = second;
+    aperture_queue[head].id = id;
+    aperture_queue[head].flags = flags;
+    aperture_head = next;
+}
+
+uint8_t em_aperture_event_pop(struct em_aperture_event *out)
+{
+    if (!out) return 0u;
+    __disable_irq();
+    uint8_t tail = aperture_tail;
+    if (tail == aperture_head) { __enable_irq(); return 0u; }
+    out->t_ms = aperture_queue[tail].t_ms;
+    out->first = aperture_queue[tail].first;
+    out->second = aperture_queue[tail].second;
+    out->id = aperture_queue[tail].id;
+    out->flags = aperture_queue[tail].flags;
+    aperture_tail = (uint8_t)((tail + 1u) % EM_APERTURE_QUEUE_SIZE);
+    __enable_irq();
+    return 1u;
+}
+
+uint32_t em_aperture_event_dropped(void) { return aperture_dropped; }
 volatile uint8_t  em_focus_mf;
 static uint8_t    g_mf_run;      /* consecutive 0x81 frames, to EM_MF_FRAMES */
 volatile uint16_t em_mf_edges;
@@ -1219,6 +1269,7 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 		 * a body ever commands an aperture this device does not have,
 		 * which is the only reason the channel matters here. */
 		em_aperture_req = (uint16_t)rx[6] | ((uint16_t)rx[7] << 8);
+		aperture_record(0x1Bu, em_aperture_req, 0u, 0u);
 	}
 
 	/* Message 0x04's MODE BYTE, payload[10] = frame offset 16, on EVERY
@@ -1260,6 +1311,11 @@ static void em_frame_in(const uint8_t *rx, uint16_t n)
 	 * 6 header + 7 payload bytes needs 6 + 7 + 3 = 16. */
 	if (rx[3] != EM_CLASS_INIT && rx[5] == 0x03u && n >= 16) {
 		em_m03_aperture = (uint16_t)rx[11] | ((uint16_t)rx[12] << 8);
+		/* pl[7] follows the second aperture; require all eight payload bytes. */
+		if (n >= 17u) {
+			uint16_t first = (uint16_t)rx[9] | ((uint16_t)rx[10] << 8);
+			aperture_record(0x03u, first, em_m03_aperture, rx[13]);
+		}
 		if (em_m03_n != 0xFFFFu) {
 			em_m03_n++;
 		}
@@ -2348,6 +2404,7 @@ uint8_t em_take_query(uint8_t *tag, uint16_t *operand)
 void em_init(void)
 {
 	em_t_init_done = 0;
+	aperture_seen = 0u;
 	uint32_t ukiyo_boot_start_ms = millis();
 	/* Apply the selected lens profile before enabling the bus. */
 	ukiyo_profile_apply();
@@ -2668,6 +2725,7 @@ void em_suspend_begin(void)
 static void em_session_reset(void)
 {
 	__disable_irq();
+	aperture_seen = 0u;
 	req_clear();
 	g_file_pending   = 0;
 	g_status_due     = 0;

@@ -23,6 +23,22 @@ class CatalogTests(unittest.TestCase):
                 self.assertEqual(select_profile(catalog, key), p)
         self.assertEqual(set(CONFIG.parent.glob('*.bin')), expected)
 
+    def test_arsat_aperture_probe(self):
+        import struct
+        catalog = load_catalog()
+        default = catalog['arsat-m-80-200-4-5']
+        probe = catalog['arsat-m-80-200-4-5-aperture']
+        self.assertEqual(probe['focal_length_source'], 'zoom_aperture')
+        self.assertEqual(default, dict(probe, profile_id=default['profile_id'],
+                                       focal_length_source='zoom_range'))
+        image = build_profile(probe)
+        spec = 16 + 148
+        self.assertEqual(struct.unpack_from('<HH', image, spec + 6), (4096, 7168))
+        self.assertEqual(image[spec + 22:spec + 28], bytes.fromhex('00 80 02 00 10 10'))
+        self.assertEqual(struct.unpack_from('<HH', image, 16 + 30), (800, 800))
+        self.assertEqual(struct.unpack_from('<HH', image, 16 + 6), (4096, 4096))
+        self.assertNotEqual(image, build_profile(default))
+
     def test_duplicate_and_unsafe_id(self):
         p = next(iter(load_catalog().values()))
         with tempfile.TemporaryDirectory() as d:

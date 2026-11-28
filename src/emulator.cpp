@@ -211,6 +211,31 @@ void arm_internal() {
   handshake_reported = false;
 }
 
+/* At most one short USB write per loop, after protocol servicing. Keep a
+ * pending record when CDC has no room; never wait in the interrupt. */
+void poll_aperture_monitor() {
+  static struct em_aperture_event event;
+  static bool pending = false;
+  if (!Serial || trace_dump.active) return;
+  if (!pending) pending = em_aperture_event_pop(&event) != 0;
+  if (!pending) return;
+  char line[64];
+  int n;
+  if (event.id == 0x03u) {
+    const unsigned live = event.flags & 0x80u ? event.second : event.first;
+    n = snprintf(line, sizeof(line), "A03 t=%lu a=%04X b=%04X s=%02X live=%04X\n",
+                 (unsigned long)event.t_ms, (unsigned)event.first,
+                 (unsigned)event.second, (unsigned)event.flags, live);
+  } else {
+    n = snprintf(line, sizeof(line), "A1B t=%lu raw=%04X\n",
+                 (unsigned long)event.t_ms, (unsigned)event.first);
+  }
+  if (n <= 0 || (size_t)n >= sizeof(line)) { pending = false; return; }
+  if (Serial.availableForWrite() < n) return;
+  Serial.write((const uint8_t*)line, (size_t)n);
+  pending = false;
+}
+
 void log_mode(const char* what) {
   if (!Serial) return;  // Never block camera initialization on USB CDC.
   Serial.print("[t_ms="); Serial.print(millis());
@@ -435,6 +460,7 @@ void poll() {
     last_frames_rx = em_frames_rx;
     last_frames_tx = em_frames_tx;
   }
+  if (em_handshake_done) poll_aperture_monitor();
 #endif
 }
 
@@ -513,6 +539,7 @@ void status() {
   Serial.print("PROTOCOL_TRACE_TRIGGERED="); Serial.println(em_trace_triggered());
   Serial.print("PROTOCOL_TRACE_CS_OMITTED="); Serial.println(em_trace_cs_omitted());
   Serial.print("PROTOCOL_TRACE_FROZEN="); Serial.println(em_trace_frozen());
+  Serial.print("APERTURE_EVENTS_DROPPED="); Serial.println(em_aperture_event_dropped());
   Serial.print("BAD_FRAMES="); Serial.println(em_bad_frames);
   Serial.print("RX_SKIPPED_BYTES="); Serial.println(em_rx_skipped);
   Serial.print("REQUEST_DROPPED="); Serial.println(em_req_dropped);
