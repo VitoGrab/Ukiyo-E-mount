@@ -267,7 +267,7 @@
   },
   {
     "profile_id": "arsat-m-80-200-4-5",
-    "lens_model": "ARSAT M 80-200mm f4.5",
+    "lens_model": "ARSAT M 80-200mm f4.5 [DZ]",
     "sony_lens_id": 0,
     "lens_type": "zoom",
     "focal_length_min_mm": 80,
@@ -281,7 +281,7 @@
   },
   {
     "profile_id": "arsat-m-80-200-4-5-aperture",
-    "lens_model": "ARSAT M 80-200mm f4.5",
+    "lens_model": "ARSAT M 80-200mm f4.5 [AZ]",
     "sony_lens_id": 0,
     "lens_type": "zoom",
     "focal_length_min_mm": 80,
